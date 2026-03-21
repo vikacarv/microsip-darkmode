@@ -47,6 +47,8 @@
 
 #include "afxvisualmanager.h"
 #include "afxvisualmanagerwindows.h"
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
 
 #include "iphlpapi.h"
 #include "wininet.h"
@@ -1906,6 +1908,10 @@ BOOL CmainDlg::OnInitDialog()
 	m_brButton.CreateSolidBrush(RGB(55, 55, 55));
 	// ===== FIM DARK MODE =====
 
+	// ===== FASE 1: DWM Dark Title Bar =====
+BOOL darkTitle = TRUE;
+DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
+// ===== FIM FASE 1 =====
 
 	WTSRegisterSessionNotification(m_hWnd, NOTIFY_FOR_THIS_SESSION);
 	mmNotificationClient = new CMMNotificationClient();
