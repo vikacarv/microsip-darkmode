@@ -1,0 +1,28 @@
+# Visual Studio build outputs
+Release/
+Debug/
+x64/
+Win32/
+
+# Visual Studio files
+*.user
+*.suo
+*.aps
+*.ncb
+*.sdf
+*.db
+.vs/
+ipch/
+
+# Compiled objects
+*.obj
+*.pch
+*.idb
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Executable outputs (serão gerados via CI ou build manual)
+*.exe
+*.msi
