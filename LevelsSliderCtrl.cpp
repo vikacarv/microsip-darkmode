@@ -28,7 +28,9 @@ void CLevelsSliderCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *result)
 				else {
 					rect.DeflateRect(MulDiv(3, dpiY, 96), MulDiv(6, dpiY, 96));
 				}
-				pDC->FillSolidRect(&rect, RGB(170, 170, 170));
+				// ===== DARK MODE: thumb rosa cyberpunk =====
+				pDC->FillSolidRect(&rect, RGB(180, 20, 90));
+				// ===== FIM DARK MODE =====
 			}
 			*result = CDRF_SKIPDEFAULT;
 			break;
@@ -51,52 +53,46 @@ void CLevelsSliderCtrl::OnCustomDraw(NMHDR *pNotifyStruct, LRESULT *result)
 						rect.right ^= rect.bottom ^= rect.right ^= rect.bottom; // swap right and bottom values
 					}
 					rect.DeflateRect(2, 2);
-					selmin = (int)(((double)(selmin - min) / max * rect.Height()) + 0.5) + rect.top;
-					selmax = (int)(((double)(selmax - min) / max * rect.Height()) + 0.5) + rect.top;
-					if (!IsActive) {
-						pDC->FillSolidRect(CRect(rect.left, rect.top, rect.right, rect.bottom), pDC->GetBkColor());
-					}
-					else {
-						pDC->FillSolidRect(CRect(rect.left, rect.top, rect.right, rect.bottom), GetSysColor(COLOR_WINDOW));
-					}
-					pDC->FillSolidRect(CRect(rect.left, selmin, rect.right, selmax), hot ? RGB(255, 0, 0) : GetSysColor(COLOR_HIGHLIGHT));
-					pDC->ExcludeClipRect(rect);
-				}
-				else {
-					hot = selmax >= GetRangeMax();
-					// fix windows bug
-					if (rect.bottom > rect.right) {
-						rect.left ^= rect.top ^= rect.left ^= rect.top; // swap left and top values
-						rect.right ^= rect.bottom ^= rect.right ^= rect.bottom; // swap right and bottom values
-					}
-					rect.DeflateRect(2, 2);
-					selmin = (int)(((double)(selmin - min) / max * rect.Width()) + 0.5) + rect.left;
-					selmax = (int)(((double)(selmax - min) / max * rect.Width()) + 0.5) + rect.left;
-					if (!IsActive) {
-						pDC->FillSolidRect(CRect(rect.left, rect.top, rect.right, rect.bottom), pDC->GetBkColor());
-					}
-					else {
-						pDC->FillSolidRect(CRect(rect.left, rect.top, rect.right, rect.bottom), GetSysColor(COLOR_WINDOW));
-					}
-					pDC->FillSolidRect(CRect(selmin, rect.top, selmax, rect.bottom), hot ? RGB(255, 0, 0) : GetSysColor(COLOR_HIGHLIGHT));
-					pDC->ExcludeClipRect(rect);
-				}
-			}
-			*result = CDRF_DODEFAULT | CDRF_NOTIFYPOSTPAINT;
-			break;
-		}
-		}
-		break;
-	case CDDS_ITEMPOSTPAINT:
-		switch (pNmcd->dwItemSpec) {
-		case TBCD_CHANNEL: {
-			CDC *pDC = CDC::FromHandle(pNmcd->hdc);
-			if (pDC) {
-				pDC->SelectClipRgn(NULL);
-			}
-			break;
-		}
-		}
-		break;
-	}
+                    selmin = (int)(((double)(selmin - min) / max * rect.Height()) + 0.5) + rect.top;
+                    selmax = (int)(((double)(selmax - min) / max * rect.Height()) + 0.5) + rect.top;
+                    // ===== DARK MODE =====
+                    pDC->FillSolidRect(CRect(rect.left, rect.top, rect.right, rect.bottom), RGB(45, 45, 45));
+                    // ===== FIM DARK MODE =====
+                    pDC->FillSolidRect(CRect(rect.left, selmin, rect.right, selmax), RGB(120, 0, 60));
+                    pDC->ExcludeClipRect(rect);
+                }
+                else {
+                    hot = selmax >= GetRangeMax();
+                    // fix windows bug
+                    if (rect.bottom > rect.right) {
+                        rect.left ^= rect.top ^= rect.left ^= rect.top;
+                        rect.right ^= rect.bottom ^= rect.right ^= rect.bottom;
+                    }
+                    rect.DeflateRect(2, 2);
+                    selmin = (int)(((double)(selmin - min) / max * rect.Width()) + 0.5) + rect.left;
+                    selmax = (int)(((double)(selmax - min) / max * rect.Width()) + 0.5) + rect.left;
+                    // ===== DARK MODE =====
+                    pDC->FillSolidRect(CRect(rect.left, rect.top, rect.right, rect.bottom), RGB(45, 45, 45));
+                    // ===== FIM DARK MODE =====
+                    pDC->FillSolidRect(CRect(selmin, rect.top, selmax, rect.bottom), RGB(120, 0, 60));
+                    pDC->ExcludeClipRect(rect);
+                }
+            }
+            *result = CDRF_DODEFAULT | CDRF_NOTIFYPOSTPAINT;
+            break;
+        }
+        }
+        break;
+    case CDDS_ITEMPOSTPAINT:
+        switch (pNmcd->dwItemSpec) {
+        case TBCD_CHANNEL: {
+            CDC *pDC = CDC::FromHandle(pNmcd->hdc);
+            if (pDC) {
+                pDC->SelectClipRgn(NULL);
+            }
+            break;
+        }
+        }
+        break;
+    }
 }
