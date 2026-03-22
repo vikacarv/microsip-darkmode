@@ -26,6 +26,7 @@
 #include "langpack.h"
 #include "Hid.h"
 #include "ButtonSafe.h"
+#include <commctrl.h>
 
 static CString digitsDTMFDelayed;
 
@@ -339,6 +340,53 @@ void Dialer::OnTimerShortcutsBlink()
 	}
 }
 
+// ===== DARK MODE: subclass do combobox =====
+static LRESULT CALLBACK ComboSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT) {
+        PAINTSTRUCT ps;
+        HDC hdc = ::BeginPaint(hWnd, &ps);
+        RECT rc;
+        ::GetClientRect(hWnd, &rc);
+        ::FillRect(hdc, &rc, ::CreateSolidBrush(RGB(28, 28, 28)));
+        // desenhar seta
+        RECT rcArrow = rc;
+        rcArrow.left = rc.right - 20;
+        ::FillRect(hdc, &rcArrow, ::CreateSolidBrush(RGB(42, 42, 42)));
+        POINT pts[3];
+        int cx = rcArrow.left + (rcArrow.right - rcArrow.left) / 2;
+        int cy = (rc.top + rc.bottom) / 2;
+        pts[0].x = cx - 4; pts[0].y = cy - 2;
+        pts[1].x = cx + 4; pts[1].y = cy - 2;
+        pts[2].x = cx;     pts[2].y = cy + 3;
+        HBRUSH hBrush = ::CreateSolidBrush(RGB(180, 180, 180));
+        HPEN hPen = ::CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
+        HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+        HBRUSH hOldBrush = (HBRUSH)::SelectObject(hdc, hBrush);
+        ::Polygon(hdc, pts, 3);
+        ::SelectObject(hdc, hOldPen);
+        ::SelectObject(hdc, hOldBrush);
+        ::DeleteObject(hPen);
+        ::DeleteObject(hBrush);
+        // texto
+        TCHAR szText[256] = {0};
+        ::GetWindowText(hWnd, szText, 255);
+        RECT rcText = rc;
+        rcText.right -= 22;
+        rcText.left += 4;
+        ::SetBkMode(hdc, TRANSPARENT);
+        ::SetTextColor(hdc, RGB(220, 220, 220));
+        HFONT hFont = (HFONT)::SendMessage(hWnd, WM_GETFONT, 0, 0);
+        HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+        ::DrawText(hdc, szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        ::SelectObject(hdc, hOldFont);
+        ::EndPaint(hWnd, &ps);
+        return 0;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+// ===== FIM DARK MODE =====
+
 BOOL Dialer::OnInitDialog()
 {
 	CBaseDialog::OnInitDialog();
@@ -462,6 +510,21 @@ BOOL Dialer::OnInitDialog()
 	CComboBox *combobox = (CComboBox*)GetDlgItem(IDC_NUMBER);
 	combobox->SetWindowPos(NULL, 0, 0, combobox->GetDroppedWidth(), MulDiv(400, dpiY, 96), SWP_NOZORDER | SWP_NOMOVE);
 	combobox->SetFont(&m_font_number);
+	// ===== DARK MODE: campo de número =====
+	SetWindowTheme(combobox->GetSafeHwnd(), L"", L"");
+	SetWindowSubclass(combobox->GetSafeHwnd(), ComboSubclassProc, 1, 0);
+	combobox->SetEditSel(0, 0);
+	// ===== FIM DARK MODE =====
+	// ===== DARK MODE: seta do combobox =====
+	COMBOBOXINFO cbi = { sizeof(COMBOBOXINFO) };
+	combobox->GetComboBoxInfo(&cbi);
+	if (cbi.hwndItem) {
+		SetWindowTheme(cbi.hwndItem, L"", L"");
+	}
+	if (cbi.hwndList) {
+		SetWindowTheme(cbi.hwndList, L"", L"");
+	}
+	// ===== FIM DARK MODE =====
 	GetDlgItem(IDC_KEY_1)->SetFont(&m_font);
 	GetDlgItem(IDC_KEY_2)->SetFont(&m_font);
 	GetDlgItem(IDC_KEY_3)->SetFont(&m_font);

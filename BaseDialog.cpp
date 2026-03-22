@@ -277,7 +277,9 @@ HBRUSH CBaseDialog::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
     HBRUSH hbr = CDialog::OnCtlColor(pDC, pWnd, nCtlColor);
     if (nCtlColor == CTLCOLOR_DLG ||
         nCtlColor == CTLCOLOR_STATIC ||
-        nCtlColor == CTLCOLOR_BTN)
+        nCtlColor == CTLCOLOR_BTN ||
+        nCtlColor == CTLCOLOR_EDIT ||
+        nCtlColor == CTLCOLOR_LISTBOX)
     {
         pDC->SetBkColor(RGB(28, 28, 28));
         pDC->SetTextColor(RGB(220, 220, 220));
