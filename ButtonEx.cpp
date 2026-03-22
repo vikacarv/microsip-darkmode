@@ -16,22 +16,25 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "StdAfx.h"   
-#include "ButtonEx.h"   
+#include "StdAfx.h"
+#include "ButtonEx.h"
 
-// CButtonEx   
+// CButtonEx
 IMPLEMENT_DYNAMIC(CButtonEx, CMFCButton)
-CButtonEx::CButtonEx()   
-{   
-	m_nFlatStyle = CMFCButton::BUTTONSTYLE_NOBORDERS;
-	m_bTransparent = false;
+CButtonEx::CButtonEx()
+{
+    m_nFlatStyle = CMFCButton::BUTTONSTYLE_NOBORDERS;
+    m_bTransparent = false;
+    // ===== DARK MODE: cores padrão =====
+    m_FaceColor = RGB(58, 20, 40);
+    m_TextColor = RGB(212, 120, 154);
+    // ===== FIM DARK MODE =====
 }
-   
-CButtonEx::~CButtonEx()   
-{   
+CButtonEx::~CButtonEx()
+{
 }
 
-BEGIN_MESSAGE_MAP(CButtonEx, CMFCButton)   
+BEGIN_MESSAGE_MAP(CButtonEx, CMFCButton)
     //{{AFX_MSG_MAP(CButtonEx)
 	ON_WM_MOUSEMOVE()
     //}}AFX_MSG_MAP
@@ -44,14 +47,15 @@ void CButtonEx::OnMouseMove(UINT nFlags, CPoint point)
 
 BOOL CButtonEx::EnableWindow(BOOL bEnable)
 {
-	if (bEnable) {
-		SetTextColor(m_TextColor);
-		SetFaceColor(m_FaceColor, true);
-	}
-	else {
-//		SetTextColor(RGB(123, 123, 123));
-		SetTextColor(RGB(0, 0, 0));
-		SetFaceColor(RGB(222, 222, 222), true);
-	}
-	return CMFCButton::EnableWindow(bEnable);
+    if (bEnable) {
+        SetTextColor(m_TextColor);
+        SetFaceColor(m_FaceColor, true);
+    }
+    else {
+        // ===== DARK MODE: manter cor escura quando desabilitado =====
+        SetTextColor(RGB(100, 60, 80));
+        SetFaceColor(RGB(40, 15, 28), true);
+        // ===== FIM DARK MODE =====
+    }
+    return CMFCButton::EnableWindow(bEnable);
 }

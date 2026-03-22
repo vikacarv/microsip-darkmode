@@ -479,10 +479,12 @@ BOOL Dialer::OnInitDialog()
 	GetDlgItem(IDC_REDIAL)->SetFont(&m_font);
 	GetDlgItem(IDC_DELETE)->SetFont(&m_font);
 
-	m_ButtonCall.m_FaceColor = _GLOBAL_DIALER_CALL_COLOR;
-	m_ButtonCall.m_TextColor = RGB(255, 255, 255);
-	m_ButtonEnd.m_FaceColor = _GLOBAL_DIALER_END_COLOR;
-	m_ButtonEnd.m_TextColor = RGB(255, 255, 255);
+	// ===== DARK MODE: botão Chamar cyberpunk =====
+	m_ButtonCall.m_FaceColor = RGB(120, 0, 60);
+	m_ButtonCall.m_TextColor = RGB(255, 20, 147);
+	m_ButtonCall.SetFaceColor(RGB(120, 0, 60), true);
+	m_ButtonCall.SetTextColor(RGB(255, 20, 147));
+	// ===== FIM DARK MODE =====
 	m_ButtonEnd.EnableWindow(m_ButtonEnd.IsWindowEnabled());
 	m_ButtonCall.SetFont(&m_font_call);
 	m_ButtonEnd.SetFont(&m_font_call);
@@ -681,7 +683,7 @@ void Dialer::RebuildButtons(bool init)
 	bool addAA = accountSettings.autoAnswer == _T("button");
 	bool addAC = accountSettings.buttonAC && !accountSettings.singleMode;
 	bool addConf = accountSettings.buttonCONF;
-	
+
 	bool addRec = accountSettings.recordingButton;
 	if (addDND || addFWD || addAA || addAC || addConf || addRec) {
 		CRect windowRect;
@@ -1073,7 +1075,7 @@ void Dialer::SetDTMF(CString digits)
 	CComboBox *combobox = (CComboBox*)GetDlgItem(IDC_NUMBER);
 	CRect rect;
 	combobox->GetWindowRect(rect);
-	
+
 	CRect mapRect;
 	mapRect.bottom = 45;
 	MapDialogRect(&mapRect);
