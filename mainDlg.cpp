@@ -1960,7 +1960,40 @@ int CmainDlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
 	return CBaseDialog::OnCreate(lpCreateStruct);
 }
+// ===== DARK MODE: subclass botão ícone =====
+static LRESULT CALLBACK MenuButtonSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT) {
+        PAINTSTRUCT ps;
+        HDC hdc = ::BeginPaint(hWnd, &ps);
+        RECT rc;
+        ::GetClientRect(hWnd, &rc);
+        ::FillRect(hdc, &rc, ::CreateSolidBrush(RGB(28, 28, 28)));
 
+        // desenhar seta ▼ em cinza claro
+        int cx = (rc.left + rc.right) / 2;
+        int cy = (rc.top + rc.bottom) / 2;
+        POINT pts[3];
+        pts[0].x = cx - 5; pts[0].y = cy - 2;
+        pts[1].x = cx + 5; pts[1].y = cy - 2;
+        pts[2].x = cx;     pts[2].y = cy + 4;
+
+        HBRUSH hBrush = ::CreateSolidBrush(RGB(180, 180, 180));
+        HPEN hPen = ::CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
+        HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+        HBRUSH hOldBrush = (HBRUSH)::SelectObject(hdc, hBrush);
+        ::Polygon(hdc, pts, 3);
+        ::SelectObject(hdc, hOldPen);
+        ::SelectObject(hdc, hOldBrush);
+        ::DeleteObject(hPen);
+        ::DeleteObject(hBrush);
+
+        ::EndPaint(hWnd, &ps);
+        return 0;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+// ===== FIM DARK MODE =====
 // ===== FASE 7: subclass do tab control =====
 LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
@@ -2037,6 +2070,13 @@ BOOL CmainDlg::OnInitDialog()
 	m_brBackground.CreateSolidBrush(m_clrBackground);
 	m_brControl.CreateSolidBrush(m_clrControl);
 	m_brButton.CreateSolidBrush(RGB(55, 55, 55));
+	// ===== FIM DARK MODE =====
+
+	HICON hIconDropdown = LoadImageIcon(IDI_DROPDOWN);
+	m_ButtonMenu.SetIcon(hIconDropdown);
+	// ===== DARK MODE: botão menu dropdown =====
+	SetWindowTheme(m_ButtonMenu.GetSafeHwnd(), L"", L"");
+	SetWindowSubclass(m_ButtonMenu.GetSafeHwnd(), MenuButtonSubclassProc, 1, (DWORD_PTR)hIconDropdown);
 	// ===== FIM DARK MODE =====
 
 	// ===== FASE 1: DWM Dark Title Bar =====
@@ -2213,8 +2253,11 @@ DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
 	// ===== FASE 7: aumentar largura das abas =====
 	size.SetSize(mapRect.right, tabRect.Height() - mapRect.bottom);
 	// ===== FIM FASE 7 =====
-
 	m_ButtonMenu.SetIcon(LoadImageIcon(IDI_DROPDOWN));
+	// ===== DARK MODE: botão menu dropdown =====
+	SetWindowTheme(m_ButtonMenu.GetSafeHwnd(), L"", L"");
+	SetWindowSubclass(m_ButtonMenu.GetSafeHwnd(), MenuButtonSubclassProc, 1, 0);
+	// ===== FIM DARK MODE =====
 
 	if (widthAdd) {
 		CRect pageRect;
