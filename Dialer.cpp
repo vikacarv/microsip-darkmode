@@ -664,6 +664,10 @@ BOOL Dialer::OnInitDialog()
 	SetWindowSubclass(GetDlgItem(IDC_BUTTON_MUTE_INPUT)->GetSafeHwnd(), IconButtonSubclassProc, 2, (DWORD_PTR)this);
 	SetWindowSubclass(GetDlgItem(IDC_MESSAGE)->GetSafeHwnd(), IconButtonSubclassProc, 3, (DWORD_PTR)this);
 	// ===== FIM DARK MODE =====
+	// ===== DARK MODE: botões hold e transfer =====
+	SetWindowSubclass(GetDlgItem(IDC_HOLD)->GetSafeHwnd(), IconButtonSubclassProc, 4, (DWORD_PTR)this);
+	SetWindowSubclass(GetDlgItem(IDC_TRANSFER)->GetSafeHwnd(), IconButtonSubclassProc, 5, (DWORD_PTR)this);
+	// ===== FIM DARK MODE =====
 
 	UpdateCallButton();
 
