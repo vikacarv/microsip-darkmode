@@ -1652,6 +1652,7 @@ void CmainDlg::DoDataExchange(CDataExchange * pDX)
 
 BEGIN_MESSAGE_MAP(CmainDlg, CBaseDialog)
 	ON_WM_CTLCOLOR()
+	ON_WM_ERASEBKGND()
 	ON_WM_CREATE()
 	ON_WM_SYSCOMMAND()
 	ON_WM_QUERYENDSESSION()
@@ -1715,10 +1716,30 @@ END_MESSAGE_MAP()
 
 LRESULT CmainDlg::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
 {
-	if (message == WM_TASKBARRESTARTMESSAGE) {
-		ShowTrayIcon();
-	}
-	return CBaseDialog::WindowProc(message, wParam, lParam);
+    if (message == WM_TASKBARRESTARTMESSAGE) {
+        ShowTrayIcon();
+    }
+    // ===== FASE 2: fundo escuro =====
+    if (message == WM_ERASEBKGND) {
+        HDC hdc = (HDC)wParam;
+        CRect rect;
+        GetClientRect(&rect);
+        HBRUSH hbr = ::CreateSolidBrush(RGB(28, 28, 28));
+        ::FillRect(hdc, &rect, hbr);
+        ::DeleteObject(hbr);
+        return 1;
+    }
+    if (message == WM_CTLCOLORDLG) {
+        return (LRESULT)::CreateSolidBrush(RGB(28, 28, 28));
+    }
+    if (message == WM_CTLCOLORSTATIC) {
+        HDC hdc = (HDC)wParam;
+        ::SetBkColor(hdc, RGB(28, 28, 28));
+        ::SetTextColor(hdc, RGB(255, 255, 255));
+        return (LRESULT)::CreateSolidBrush(RGB(28, 28, 28));
+    }
+    // ===== FIM FASE 2 =====
+    return CBaseDialog::WindowProc(message, wParam, lParam);
 }
 
 BOOL CmainDlg::PreTranslateMessage(MSG * pMsg)
@@ -1836,7 +1857,6 @@ L16/48000/2;LPCM 48 kHz Stereo");
 int CmainDlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
 	WM_TASKBARRESTARTMESSAGE = RegisterWindowMessage(_T("TaskbarCreated"));
-	CMFCVisualManager::SetDefaultManager(RUNTIME_CLASS(CMFCVisualManagerWindows));
 	CDC* pDC = GetDC();
 	if (pDC) {
 		dpiY = GetDeviceCaps(pDC->m_hDC, LOGPIXELSY);
@@ -1912,6 +1932,13 @@ BOOL CmainDlg::OnInitDialog()
 BOOL darkTitle = TRUE;
 DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
 // ===== FIM FASE 1 =====
+
+// ===== FASE 2: fundo escuro forçado =====
+::SetClassLongPtr(m_hWnd, GCLP_HBRBACKGROUND,
+    (LONG_PTR)::CreateSolidBrush(RGB(28, 28, 28)));
+::InvalidateRect(m_hWnd, NULL, TRUE);
+::UpdateWindow(m_hWnd);
+// ===== FIM FASE 2 =====
 
 	WTSRegisterSessionNotification(m_hWnd, NOTIFY_FOR_THIS_SESSION);
 	mmNotificationClient = new CMMNotificationClient();
@@ -5740,3 +5767,12 @@ HBRUSH CmainDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 
 // ===== FIM DARK MODE =====
 
+// ===== FASE 2: OnEraseBkgnd =====
+BOOL CmainDlg::OnEraseBkgnd(CDC* pDC)
+{
+    CRect rect;
+    GetClientRect(&rect);
+    pDC->FillSolidRect(&rect, m_clrBackground);
+    return TRUE;
+}
+// ===== FIM FASE 2 =====

@@ -65,6 +65,7 @@ private:
 	COLORREF m_clrTextSec;
 	COLORREF m_clrControl;
 public:
+afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 // ===== FIM DARK MODE =====
 	CmainDlg(CWnd* pParent = NULL);	// standard constructor
 	~CmainDlg();

@@ -33,6 +33,9 @@ public:
 	void WinHelp(DWORD dwData, UINT nCmd);
 	void OpenHelp();
 
+	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+
 	virtual void TabFocusSet() = 0;
 	virtual bool GotoTab(int i, CTabCtrl* tab = NULL) = 0;
 	virtual void ProcessCommand(CString str) = 0;
@@ -69,3 +72,5 @@ private:
 	CSize           m_szInitial;
 	CSize           m_szMinimum;
 };
+
+

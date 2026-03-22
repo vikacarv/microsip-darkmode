@@ -34,6 +34,10 @@ BEGIN_MESSAGE_MAP(CBaseDialog, CDialog)
 	//{{AFX_MSG_MAP(CBaseDialog)
 	ON_WM_GETMINMAXINFO()
 	ON_WM_SIZE()
+	ON_WM_ERASEBKGND()
+	ON_WM_GETMINMAXINFO()
+    ON_WM_SIZE()
+    ON_WM_CTLCOLOR()
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
@@ -231,6 +235,8 @@ void CBaseDialog::OnGetMinMaxInfo(MINMAXINFO FAR * lpMMI)
 }
 
 void CBaseDialog::OnSize(UINT nType, int cx, int cy)
+
+
 {
 	CDialog::OnSize(nType, cx, cy);
 
@@ -256,4 +262,26 @@ void CBaseDialog::OnSize(UINT nType, int cx, int cy)
 	if (hDefer != NULL)
 		EndDeferWindowPos(hDefer);
 
+}
+
+BOOL CBaseDialog::OnEraseBkgnd(CDC* pDC)
+{
+    CRect rect;
+    GetClientRect(&rect);
+    pDC->FillSolidRect(&rect, RGB(28, 28, 28));
+    return TRUE;
+}
+
+HBRUSH CBaseDialog::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
+{
+    HBRUSH hbr = CDialog::OnCtlColor(pDC, pWnd, nCtlColor);
+    if (nCtlColor == CTLCOLOR_DLG ||
+        nCtlColor == CTLCOLOR_STATIC ||
+        nCtlColor == CTLCOLOR_BTN)
+    {
+        pDC->SetBkColor(RGB(28, 28, 28));
+        pDC->SetTextColor(RGB(220, 220, 220));
+        return (HBRUSH)::CreateSolidBrush(RGB(28, 28, 28));
+    }
+    return hbr;
 }
