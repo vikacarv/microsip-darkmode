@@ -115,33 +115,25 @@ void CButtonDialer::DrawItem(LPDRAWITEMSTRUCT lpDrawItemStruct)
 	dc.Attach(lpDrawItemStruct->hDC);		//Get device context object
 	CRect rt;
 	rt = lpDrawItemStruct->rcItem;		//Get button rect
-	dc.FillSolidRect(rt, dc.GetBkColor());
-	dc.SetBkMode(TRANSPARENT);
+// ===== DARK MODE: fundo do botão =====
+COLORREF clrBg = RGB(36, 36, 36);
+if (GetCapture() == this) {
+    clrBg = RGB(55, 55, 55);
+}
+dc.FillSolidRect(rt, clrBg);
+HPEN hPen = CreatePen(PS_SOLID, 1, RGB(60, 60, 60));
+HPEN hOldPen = (HPEN)SelectObject(dc.m_hDC, hPen);
+HBRUSH hBrush = (HBRUSH)GetStockObject(NULL_BRUSH);
+HBRUSH hOldBrush = (HBRUSH)SelectObject(dc.m_hDC, hBrush);
+Rectangle(dc.m_hDC, rt.left, rt.top, rt.right, rt.bottom);
+SelectObject(dc.m_hDC, hOldPen);
+SelectObject(dc.m_hDC, hOldBrush);
+DeleteObject(hPen);
+// ===== FIM DARK MODE =====
 
 	CRect rtl = rt;
 	UINT state = lpDrawItemStruct->itemState;	//Get state of the button
 
-	if (!m_hTheme) {
-		UINT uStyle = DFCS_BUTTONPUSH;
-		if ((state & ODS_SELECTED)) {
-			uStyle |= DFCS_PUSHED;
-			rtl.left += 1;
-			rtl.top += 1;
-		}
-		dc.DrawFrameControl(rt, DFC_BUTTON, uStyle);
-	}
-	else {
-		UINT uStyleTheme = RBS_NORMAL;
-		if ((state & ODS_SELECTED)) {
-			uStyleTheme = PBS_PRESSED;
-		}
-		else if (GetCapture() == this) {
-			uStyleTheme = PBS_HOT;
-		}
-		DrawThemeBackground(m_hTheme, dc.m_hDC,
-			BP_PUSHBUTTON, uStyleTheme,
-			rt, NULL);
-	}
 
 	CString strTemp;
 	GetWindowText(strTemp);		// Get the caption which have been set
@@ -159,7 +151,7 @@ void CButtonDialer::DrawItem(LPDRAWITEMSTRUCT lpDrawItemStruct)
 		// Do your text drawing
 		rtl.left += x12;
 		rtl.right -= x4;
-		crOldColor = dc.SetTextColor(RGB(127, 127, 127));
+		crOldColor = dc.SetTextColor(RGB(150, 150, 150));
 		dc.DrawText(letters, rtl, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 		dc.SetTextColor(crOldColor);
 		// Always select the old font back into the DC
@@ -167,10 +159,10 @@ void CButtonDialer::DrawItem(LPDRAWITEMSTRUCT lpDrawItemStruct)
 	}
 	else {
 		if (forceNumeric) {
-			crOldColor = dc.SetTextColor(RGB(80, 80, 80));
+			crOldColor = dc.SetTextColor(RGB(150, 150, 150));
 		}
 		else {
-			crOldColor = dc.SetTextColor(RGB(127, 127, 127));
+			crOldColor = dc.SetTextColor(RGB(200, 200, 200));
 		}
 		dc.DrawText(strTemp, rt, DT_CENTER | DT_VCENTER | DT_SINGLELINE);		// Draw out the caption
 		dc.SetTextColor(crOldColor);
