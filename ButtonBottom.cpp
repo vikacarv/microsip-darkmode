@@ -16,23 +16,24 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#include "StdAfx.h"   
-#include "ButtonBottom.h"   
+#include "StdAfx.h"
+#include "ButtonBottom.h"
 
- // CButtonBottom   
+ // CButtonBottom
 IMPLEMENT_DYNAMIC(CButtonBottom, CMFCButton)
 CButtonBottom::CButtonBottom()
 {
-	m_nFlatStyle = CMFCButton::BUTTONSTYLE_NOBORDERS;
-	m_bTransparent = false;
-	m_bDrawFocus = FALSE;
-	m_bHighlightChecked = FALSE;
-
-	m_clrButton = RGB(255, 255, 255);
-	m_clrButtonHover = RGB(224, 238, 249);
-	m_clrButtonPushed = RGB(92, 145, 219);
-	m_clrButtonText = RGB(0, 0, 0);
-	m_clrButtonTextPushed = RGB(255, 255, 255);
+    m_nFlatStyle = CMFCButton::BUTTONSTYLE_NOBORDERS;
+    m_bTransparent = false;
+    m_bDrawFocus = FALSE;
+    m_bHighlightChecked = FALSE;
+    // ===== DARK MODE: botões DND/AA/CONF/REC =====
+    m_clrButton = RGB(36, 36, 36);
+    m_clrButtonHover = RGB(60, 20, 40);
+    m_clrButtonPushed = RGB(120, 0, 60);
+    m_clrButtonText = RGB(160, 160, 160);
+    m_clrButtonTextPushed = RGB(255, 180, 210);
+    // ===== FIM DARK MODE =====
 }
 
 CButtonBottom::~CButtonBottom()
