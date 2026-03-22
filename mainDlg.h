@@ -49,6 +49,7 @@
 #include "Preview.h"
 #include "Transfer.h"
 #include "StatusBar.h"
+#include "DarkTabCtrl.h"
 
 // CmainDlg dialog
 class CmainDlg : public CBaseDialog
@@ -66,6 +67,7 @@ private:
 	COLORREF m_clrControl;
 public:
 afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+afx_msg void OnCustomDrawTab(NMHDR* pNMHDR, LRESULT* pResult);
 // ===== FIM DARK MODE =====
 	CmainDlg(CWnd* pParent = NULL);	// standard constructor
 	~CmainDlg();

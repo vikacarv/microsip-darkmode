@@ -20,6 +20,7 @@
 
 #include "mainDlg.h"
 #include "microsip.h"
+#include "DarkTabCtrl.h"
 
 #include "Mmsystem.h"
 #include "settings.h"
@@ -53,6 +54,9 @@
 #include "iphlpapi.h"
 #include "wininet.h"
 #pragma comment(lib, "iphlpapi.lib")
+
+#include <commctrl.h>
+#pragma comment(lib, "comctl32.lib")
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -1652,6 +1656,7 @@ void CmainDlg::DoDataExchange(CDataExchange * pDX)
 
 BEGIN_MESSAGE_MAP(CmainDlg, CBaseDialog)
 	ON_WM_CTLCOLOR()
+	ON_NOTIFY(NM_CUSTOMDRAW, IDC_MAIN_TAB, OnCustomDrawTab)
 	ON_WM_ERASEBKGND()
 	ON_WM_CREATE()
 	ON_WM_SYSCOMMAND()
@@ -1729,16 +1734,58 @@ LRESULT CmainDlg::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
         ::DeleteObject(hbr);
         return 1;
     }
-    if (message == WM_CTLCOLORDLG) {
-        return (LRESULT)::CreateSolidBrush(RGB(28, 28, 28));
+    // ===== FIM FASE 2 =====
+    // ===== FASE 7: abas dark mode =====
+    if (message == WM_NOTIFY) {
+        NMHDR* pNMHDR = (NMHDR*)lParam;
+        CTabCtrl* tab = (CTabCtrl*)GetDlgItem(IDC_MAIN_TAB);
+        if (tab && pNMHDR->hwndFrom == tab->GetSafeHwnd()) {
+            if (pNMHDR->code == NM_CUSTOMDRAW) {
+                NMCUSTOMDRAW* pNMCD = (NMCUSTOMDRAW*)lParam;
+                if (pNMCD->dwDrawStage == CDDS_PREPAINT) {
+                    SetWindowLongPtr(m_hWnd, DWLP_MSGRESULT, CDRF_NOTIFYITEMDRAW);
+                    return CDRF_NOTIFYITEMDRAW;
+                }
+                if (pNMCD->dwDrawStage == CDDS_ITEMPREPAINT) {
+                    CDC dc;
+                    dc.Attach(pNMCD->hdc);
+                    CRect rect(pNMCD->rc);
+                    BOOL bSelected = (pNMCD->dwItemSpec == (DWORD)tab->GetCurSel());
+                    if (bSelected) {
+                        dc.FillSolidRect(&rect, RGB(28, 28, 28));
+                        CPen pen(PS_SOLID, 2, RGB(180, 20, 90));
+                        CPen* pOldPen = dc.SelectObject(&pen);
+                        dc.MoveTo(rect.left, rect.bottom - 1);
+                        dc.LineTo(rect.right, rect.bottom - 1);
+                        dc.SelectObject(pOldPen);
+                        dc.SetTextColor(RGB(180, 20, 90));
+                    } else {
+                        dc.FillSolidRect(&rect, RGB(22, 22, 22));
+                        dc.SetTextColor(RGB(110, 110, 110));
+                    }
+                    dc.SetBkMode(TRANSPARENT);
+                    TCHAR szLabel[256] = {0};
+                    TC_ITEM tci;
+                    tci.mask = TCIF_TEXT;
+                    tci.pszText = szLabel;
+                    tci.cchTextMax = 255;
+                    tab->GetItem(pNMCD->dwItemSpec, &tci);
+                    dc.DrawText(szLabel, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    dc.Detach();
+                    SetWindowLongPtr(m_hWnd, DWLP_MSGRESULT, CDRF_SKIPDEFAULT);
+                    return CDRF_SKIPDEFAULT;
+                }
+            }
+        }
     }
-    if (message == WM_CTLCOLORSTATIC) {
+    // ===== FASE 7: fundo das abas =====
+    if (message == 0x0138) {
         HDC hdc = (HDC)wParam;
         ::SetBkColor(hdc, RGB(28, 28, 28));
-        ::SetTextColor(hdc, RGB(255, 255, 255));
+        ::SetTextColor(hdc, RGB(180, 20, 90));
         return (LRESULT)::CreateSolidBrush(RGB(28, 28, 28));
     }
-    // ===== FIM FASE 2 =====
+    // ===== FIM FASE 7 =====
     return CBaseDialog::WindowProc(message, wParam, lParam);
 }
 
@@ -1914,6 +1961,70 @@ int CmainDlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	return CBaseDialog::OnCreate(lpCreateStruct);
 }
 
+// ===== FASE 7: subclass do tab control =====
+LRESULT CALLBACK TabCtrlSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT) {
+    PAINTSTRUCT ps;
+    HDC hdc = ::BeginPaint(hWnd, &ps);
+
+    // fundo geral
+    RECT rcClient;
+    ::GetClientRect(hWnd, &rcClient);
+    ::FillRect(hdc, &rcClient, ::CreateSolidBrush(RGB(28, 28, 28)));
+
+    int nCount = TabCtrl_GetItemCount(hWnd);
+    int nSel = TabCtrl_GetCurSel(hWnd);
+
+    // fonte padrão do sistema
+    HFONT hFont = (HFONT)::SendMessage(hWnd, WM_GETFONT, 0, 0);
+    HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+
+    for (int i = 0; i < nCount; i++) {
+        RECT rcTab;
+        TabCtrl_GetItemRect(hWnd, i, &rcTab);
+        BOOL bSelected = (i == nSel);
+
+        // separador
+        RECT rcSep = rcTab;
+        rcSep.left = rcTab.right - 1;
+        ::FillRect(hdc, &rcSep, ::CreateSolidBrush(RGB(55, 55, 55)));
+
+        if (bSelected) {
+            ::FillRect(hdc, &rcTab, ::CreateSolidBrush(RGB(28, 28, 28)));
+            HPEN hPen = ::CreatePen(PS_SOLID, 2, RGB(180, 20, 90));
+            HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+            ::MoveToEx(hdc, rcTab.left, rcTab.bottom - 1, NULL);
+            ::LineTo(hdc, rcTab.right, rcTab.bottom - 1);
+            ::SelectObject(hdc, hOldPen);
+            ::DeleteObject(hPen);
+            ::SetTextColor(hdc, RGB(180, 20, 90));
+        } else {
+            ::FillRect(hdc, &rcTab, ::CreateSolidBrush(RGB(22, 22, 22)));
+            ::SetTextColor(hdc, RGB(110, 110, 110));
+        }
+
+        ::SetBkMode(hdc, TRANSPARENT);
+        TCHAR szLabel[256] = {0};
+        TC_ITEM tci = {0};
+        tci.mask = TCIF_TEXT;
+        tci.pszText = szLabel;
+        tci.cchTextMax = 255;
+        TabCtrl_GetItem(hWnd, i, &tci);
+
+        RECT rcText = rcTab;
+        ::InflateRect(&rcText, -2, 0);
+        ::DrawText(hdc, szLabel, -1, &rcText, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    ::SelectObject(hdc, hOldFont);
+    ::EndPaint(hWnd, &ps);
+    return 0;
+}
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+// ===== FIM FASE 7 =====
+
 BOOL CmainDlg::OnInitDialog()
 {
 	CBaseDialog::OnInitDialog();
@@ -2079,6 +2190,11 @@ DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
 	imageListStatus->Add(LoadImageIcon(IDI_DEFAULT_STARRED));
 
 	CTabCtrl* tab = (CTabCtrl*)GetDlgItem(IDC_MAIN_TAB);
+	// ===== FASE 7: subclass do tab control =====
+	SetWindowTheme(tab->GetSafeHwnd(), L"", L"");
+	SetWindowSubclass(tab->GetSafeHwnd(), TabCtrlSubclassProc, 1, 0);
+	// ===== FIM FASE 7 =====
+
 	CRect tabRect;
 	tab->GetWindowRect(&tabRect);
 	ScreenToClient(&tabRect);
@@ -2094,8 +2210,9 @@ DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
 	mapRect.bottom = 5; // bottom line height
 	MapDialogRect(&mapRect);
 	CSize size;
+	// ===== FASE 7: aumentar largura das abas =====
 	size.SetSize(mapRect.right, tabRect.Height() - mapRect.bottom);
-	tab->SetItemSize(size);
+	// ===== FIM FASE 7 =====
 
 	m_ButtonMenu.SetIcon(LoadImageIcon(IDI_DROPDOWN));
 
@@ -5764,7 +5881,50 @@ HBRUSH CmainDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
     }
     return hbr;
 }
+	// ===== FASE 7: abas dark mode =====
+void CmainDlg::OnCustomDrawTab(NMHDR* pNMHDR, LRESULT* pResult)
+{
+    NMCUSTOMDRAW* pNMCD = (NMCUSTOMDRAW*)pNMHDR;
+    *pResult = CDRF_DODEFAULT;
 
+    if (pNMCD->dwDrawStage == CDDS_PREPAINT) {
+        *pResult = CDRF_NOTIFYITEMDRAW;
+        return;
+    }
+
+    if (pNMCD->dwDrawStage == CDDS_ITEMPREPAINT) {
+        CDC dc;
+        dc.Attach(pNMCD->hdc);
+        CRect rect(pNMCD->rc);
+        BOOL bSelected = (pNMCD->dwItemSpec == (DWORD)TabCtrl_GetCurSel(pNMCD->hdr.hwndFrom));
+
+        if (bSelected) {
+            dc.FillSolidRect(&rect, RGB(28, 28, 28));
+            CPen pen(PS_SOLID, 2, RGB(180, 20, 90));
+            CPen* pOldPen = dc.SelectObject(&pen);
+            dc.MoveTo(rect.left, rect.bottom - 1);
+            dc.LineTo(rect.right, rect.bottom - 1);
+            dc.SelectObject(pOldPen);
+            dc.SetTextColor(RGB(180, 20, 90));
+        }
+        else {
+            dc.FillSolidRect(&rect, RGB(22, 22, 22));
+            dc.SetTextColor(RGB(110, 110, 110));
+        }
+
+        dc.SetBkMode(TRANSPARENT);
+        TCHAR szLabel[256] = {0};
+        TC_ITEM tci;
+        tci.mask = TCIF_TEXT;
+        tci.pszText = szLabel;
+        tci.cchTextMax = 255;
+        TabCtrl_GetItem(pNMCD->hdr.hwndFrom, pNMCD->dwItemSpec, &tci);
+        dc.DrawText(szLabel, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        dc.Detach();
+        *pResult = CDRF_SKIPDEFAULT;
+    }
+}
+// ===== FIM FASE 7 =====
 // ===== FIM DARK MODE =====
 
 // ===== FASE 2: OnEraseBkgnd =====
