@@ -387,6 +387,72 @@ static LRESULT CALLBACK ComboSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, L
 }
 // ===== FIM DARK MODE =====
 
+void Dialer::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
+{
+    if (nIDCtl == IDC_BUTTON_MUTE_OUTPUT ||
+        nIDCtl == IDC_BUTTON_MUTE_INPUT ||
+        nIDCtl == IDC_MESSAGE
+        #ifdef _GLOBAL_VIDEO
+        || nIDCtl == IDC_VIDEO_CALL
+        #endif
+        )
+    {
+        CDC dc;
+        dc.Attach(lpDIS->hDC);
+        CRect rect(lpDIS->rcItem);
+        dc.FillSolidRect(&rect, RGB(36, 36, 36));
+
+        // determinar ícone correto baseado no estado
+        HICON hIcon = NULL;
+        if (nIDCtl == IDC_BUTTON_MUTE_INPUT) {
+            hIcon = muteInput ? m_hIconMutedInput : m_hIconMuteInput;
+        }
+        else if (nIDCtl == IDC_BUTTON_MUTE_OUTPUT) {
+            hIcon = muteOutput ? m_hIconMutedOutput : m_hIconMuteOutput;
+        }
+        else {
+            hIcon = (HICON)::SendMessage(lpDIS->hwndItem, BM_GETIMAGE, IMAGE_ICON, 0);
+        }
+
+        if (hIcon) {
+            int x = rect.left + (rect.Width() - 16) / 2;
+            int y = rect.top + (rect.Height() - 16) / 2;
+            ::DrawIconEx(lpDIS->hDC, x, y, hIcon, 16, 16, 0, NULL, DI_NORMAL);
+        }
+        dc.Detach();
+        return;
+    }
+    CBaseDialog::OnDrawItem(nIDCtl, lpDIS);
+}
+static LRESULT CALLBACK IconButtonSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+    if (uMsg == WM_PAINT) {
+        PAINTSTRUCT ps;
+        HDC hdc = ::BeginPaint(hWnd, &ps);
+        RECT rc;
+        ::GetClientRect(hWnd, &rc);
+        ::FillRect(hdc, &rc, ::CreateSolidBrush(RGB(36, 36, 36)));
+        Dialer* pDialer = (Dialer*)dwRefData;
+        HICON hIcon = NULL;
+        UINT nID = ::GetDlgCtrlID(hWnd);
+        if (nID == IDC_BUTTON_MUTE_INPUT) {
+            hIcon = pDialer->muteInput ? pDialer->m_hIconMutedInput : pDialer->m_hIconMuteInput;
+        } else if (nID == IDC_BUTTON_MUTE_OUTPUT) {
+            hIcon = pDialer->muteOutput ? pDialer->m_hIconMutedOutput : pDialer->m_hIconMuteOutput;
+        } else {
+            hIcon = (HICON)::SendMessage(hWnd, BM_GETIMAGE, IMAGE_ICON, 0);
+        }
+        if (hIcon) {
+            int x = (rc.right - rc.left - 16) / 2;
+            int y = (rc.bottom - rc.top - 16) / 2;
+            ::DrawIconEx(hdc, x, y, hIcon, 16, 16, 0, NULL, DI_NORMAL);
+        }
+        ::EndPaint(hWnd, &ps);
+        return 0;
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
 BOOL Dialer::OnInitDialog()
 {
 	CBaseDialog::OnInitDialog();
@@ -570,6 +636,12 @@ BOOL Dialer::OnInitDialog()
 	m_hIconMuteInput = LoadImageIcon(IDI_MUTE_INPUT, 16, 16);
 	((CButton*)GetDlgItem(IDC_BUTTON_MUTE_INPUT))->SetIcon(m_hIconMuteInput);
 	m_hIconMutedInput = LoadImageIcon(IDI_MUTED_INPUT, 16, 16);
+	// ===== DARK MODE: fundo dos botões de ícone =====
+
+	#ifdef _GLOBAL_VIDEO
+	GetDlgItem(IDC_VIDEO_CALL)->ModifyStyle(0, BS_OWNERDRAW);
+	#endif
+	// ===== FIM DARK MODE =====
 
 	m_hIconHold = LoadImageIcon(IDI_HOLD, 16, 16);
 	m_hIconResume = LoadImageIcon(IDI_RESUME, 16, 16);
@@ -582,6 +654,16 @@ BOOL Dialer::OnInitDialog()
 #endif
 	m_hIconMessage = LoadImageIcon(IDI_MESSAGE, 16, 16);
 	((CButton*)GetDlgItem(IDC_MESSAGE))->SetIcon(m_hIconMessage);
+	// ===== DARK MODE: botões de ícone =====
+	SetWindowTheme(GetDlgItem(IDC_MESSAGE)->GetSafeHwnd(), L"", L"");
+	SetWindowTheme(GetDlgItem(IDC_BUTTON_MUTE_OUTPUT)->GetSafeHwnd(), L"", L"");
+	SetWindowTheme(GetDlgItem(IDC_BUTTON_MUTE_INPUT)->GetSafeHwnd(), L"", L"");
+	// ===== FIM DARK MODE =====
+	// ===== DARK MODE: subclass botões de ícone =====
+	SetWindowSubclass(GetDlgItem(IDC_BUTTON_MUTE_OUTPUT)->GetSafeHwnd(), IconButtonSubclassProc, 1, (DWORD_PTR)this);
+	SetWindowSubclass(GetDlgItem(IDC_BUTTON_MUTE_INPUT)->GetSafeHwnd(), IconButtonSubclassProc, 2, (DWORD_PTR)this);
+	SetWindowSubclass(GetDlgItem(IDC_MESSAGE)->GetSafeHwnd(), IconButtonSubclassProc, 3, (DWORD_PTR)this);
+	// ===== FIM DARK MODE =====
 
 	UpdateCallButton();
 
@@ -616,6 +698,7 @@ BEGIN_MESSAGE_MAP(Dialer, CBaseDialog)
 	ON_BN_CLICKED(IDCANCEL, OnBnClickedCancel)
 	ON_WM_SETCURSOR()
 	ON_WM_CTLCOLOR()
+	ON_WM_DRAWITEM()
 	ON_BN_CLICKED(IDC_DIALER_DND, &Dialer::OnBnClickedDND)
 	ON_BN_CLICKED(IDC_DIALER_FWD, &Dialer::OnBnClickedFWD)
 	ON_BN_CLICKED(IDC_DIALER_AA, &Dialer::OnBnClickedAA)
@@ -634,7 +717,6 @@ BEGIN_MESSAGE_MAP(Dialer, CBaseDialog)
 	ON_WM_RBUTTONUP()
 	ON_WM_LBUTTONUP()
 	ON_WM_MOUSEMOVE()
-
 	ON_BN_CLICKED(IDC_CALL, OnBnClickedCall)
 	ON_BN_CLICKED(IDC_DIALER_DTMF, OnBnClickedDTMF)
 #ifdef _GLOBAL_VIDEO
@@ -1628,13 +1710,19 @@ void Dialer::OnBnClickedMuteOutput()
 	CButton *button = (CButton*)GetDlgItem(IDC_BUTTON_MUTE_OUTPUT);
 	if (button->GetCheck() == BST_CHECKED) {
 		button->SetIcon(m_hIconMuteOutput);
+		::RedrawWindow(button->GetSafeHwnd(), NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 		muteOutput = FALSE;
 		OnHScroll(0, 0, NULL);
 	}
 	else {
 		button->SetIcon(m_hIconMutedOutput);
+		::RedrawWindow(button->GetSafeHwnd(), NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 		muteOutput = TRUE;
 		OnHScroll(0, 0, NULL);
+		// ===== DARK MODE: forçar repintura =====
+		button->Invalidate();
+		button->UpdateWindow();
+		// ===== FIM DARK MODE =====
 	}
 	button->SetCheck(!button->GetCheck());
 }
@@ -1644,15 +1732,21 @@ void Dialer::OnBnClickedMuteInput()
 	CButton *button = (CButton*)GetDlgItem(IDC_BUTTON_MUTE_INPUT);
 	if (button->GetCheck() == BST_CHECKED) {
 		button->SetIcon(m_hIconMuteInput);
+		::RedrawWindow(button->GetSafeHwnd(), NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 		muteInput = FALSE;
 		OnHScroll(0, 0, NULL);
 	}
 	else {
 		button->SetIcon(m_hIconMutedInput);
+		::RedrawWindow(button->GetSafeHwnd(), NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
 		muteInput = TRUE;
 		OnHScroll(0, 0, NULL);
 	}
 	button->SetCheck(!button->GetCheck());
+	// ===== DARK MODE: forçar repintura =====
+    button->Invalidate();
+    button->UpdateWindow();
+    // ===== FIM DARK MODE =====
 	if (accountSettings.headsetSupport) {
 		Hid::SetMute(muteInput);
 	}

@@ -32,11 +32,20 @@ enum DialerActions {
 	ACTION_CALL, ACTION_VIDEO_CALL, ACTION_MESSAGE
 };
 
-class Dialer :
-	public CBaseDialog
+class Dialer : public CBaseDialog
 {
-	CFont m_font;
-	CFont m_font_number;
+public:
+    // ===== DARK MODE: acesso público para subclass =====
+    HICON m_hIconMuteOutput;
+    HICON m_hIconMutedOutput;
+    HICON m_hIconMuteInput;
+    HICON m_hIconMutedInput;
+    BOOL muteOutput;
+    BOOL muteInput;
+    // ===== FIM DARK MODE =====
+
+    CFont m_font;
+    CFont m_font_number;
 	CFont m_font_balance;
 	CFont m_font_call;
 	CFont m_font_shortcuts;
@@ -59,12 +68,6 @@ class Dialer :
 	CButtonDialer m_ButtonDialerRedial;
 	CLevelsSliderCtrl m_SliderCtrlInput;
 	CLevelsSliderCtrl m_SliderCtrlOutput;
-	HICON m_hIconMuteOutput;
-	HICON m_hIconMutedOutput;
-	HICON m_hIconMuteInput;
-	HICON m_hIconMutedInput;
-	BOOL muteOutput;
-	BOOL muteInput;
 	CStatic m_ButtonMinusInput;
 	CStatic m_ButtonMinusOutput;
 	CStatic m_ButtonPlusInput;
@@ -142,14 +145,14 @@ public:
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd *pWnd, UINT nCtlColor);
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedCancel();
-	afx_msg void OnBnClickedDND(); 
-	afx_msg void OnBnClickedFWD(); 
+	afx_msg void OnBnClickedDND();
+	afx_msg void OnBnClickedFWD();
 	afx_msg void OnBnClickedAA();
 	afx_msg void OnBnClickedAC();
 	afx_msg void OnBnClickedConf();
 	afx_msg void OnBnClickedRec();
 	afx_msg void OnBnClickedVoicemail();
-
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDrawItemStruct);
 	afx_msg void OnBnClickedCall();
 	afx_msg void OnBnClickedDTMF();
 #ifdef _GLOBAL_VIDEO
