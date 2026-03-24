@@ -79,17 +79,19 @@ public:
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedCancel();
 	afx_msg void OnFilterValueChange();
-	afx_msg void OnMenuCall(); 
+	afx_msg void OnMenuCall();
 	afx_msg void OnMenuChat();
 	afx_msg void OnMenuAdd();
 	afx_msg void OnMenuCopy();
-	afx_msg void OnMenuDelete(); 
+	afx_msg void OnMenuDelete();
 	afx_msg void OnMenuExport();
 	afx_msg LRESULT OnContextMenu(WPARAM wParam,LPARAM lParam);
 	afx_msg void OnNMDblclkCalls(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnEndtrack(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 #ifdef _GLOBAL_VIDEO
-	afx_msg void OnMenuCallVideo(); 
+	afx_msg void OnMenuCallVideo();
 #endif
 	virtual BOOL PreTranslateMessage(MSG* pMsg);
 };

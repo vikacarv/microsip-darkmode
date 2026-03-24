@@ -27,8 +27,10 @@
 #include "langpack.h"
 #include "CSVFile.h"
 #include "Markup.h"
+#include "wingdi.h"
 
-enum {
+enum
+{
 	MSIP_CALLS_COL_NAME,
 	MSIP_CALLS_COL_NUMBER,
 	MSIP_CALLS_COL_TIME,
@@ -36,7 +38,7 @@ enum {
 	MSIP_CALLS_COL_INFO,
 };
 
-Calls::Calls(CWnd* pParent /*=NULL*/)
+Calls::Calls(CWnd *pParent /*=NULL*/)
 	: CBaseDialog(Calls::IDD, pParent)
 {
 	Create(IDD, pParent);
@@ -45,6 +47,57 @@ Calls::Calls(CWnd* pParent /*=NULL*/)
 Calls::~Calls(void)
 {
 }
+// ===== DARK MODE: subclass do header =====
+static LRESULT CALLBACK HeaderSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+	if (uMsg == WM_PAINT)
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = ::BeginPaint(hWnd, &ps);
+		RECT rcClient;
+		::GetClientRect(hWnd, &rcClient);
+		::FillRect(hdc, &rcClient, ::CreateSolidBrush(RGB(28, 28, 28)));
+		HFONT hFont = (HFONT)::SendMessage(hWnd, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, RGB(180, 20, 90));
+		int nCount = Header_GetItemCount(hWnd);
+		for (int i = 0; i < nCount; i++)
+		{
+			RECT rcItem;
+			Header_GetItemRect(hWnd, i, &rcItem);
+			HPEN hPen = ::CreatePen(PS_SOLID, 1, RGB(55, 55, 55));
+			HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+			::MoveToEx(hdc, rcItem.right - 1, rcItem.top, NULL);
+			::LineTo(hdc, rcItem.right - 1, rcItem.bottom);
+			::MoveToEx(hdc, rcItem.left, rcItem.bottom - 1, NULL);
+			::LineTo(hdc, rcItem.right, rcItem.bottom - 1);
+			::SelectObject(hdc, hOldPen);
+			::DeleteObject(hPen);
+			TCHAR szText[256] = {0};
+			HDITEM hdi = {0};
+			hdi.mask = HDI_TEXT | HDI_FORMAT;
+			hdi.pszText = szText;
+			hdi.cchTextMax = 255;
+			Header_GetItem(hWnd, i, &hdi);
+			rcItem.left += 6;
+			rcItem.right -= 4;
+			UINT fmt = DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS;
+			if (hdi.fmt & HDF_RIGHT)
+				fmt |= DT_RIGHT;
+			else if (hdi.fmt & HDF_CENTER)
+				fmt |= DT_CENTER;
+			else
+				fmt |= DT_LEFT;
+			::DrawText(hdc, szText, -1, &rcItem, fmt);
+		}
+		::SelectObject(hdc, hOldFont);
+		::EndPaint(hWnd, &ps);
+		return 0;
+	}
+	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+// ===== FIM DARK MODE =====
 
 BOOL Calls::OnInitDialog()
 {
@@ -67,19 +120,38 @@ BOOL Calls::OnInitDialog()
 	imageList->Add(theApp.LoadIcon(IDI_CALL_MISS));
 	imageList->Add(theApp.LoadIcon(IDI_CALL_MISS_1));
 
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
-	//list->SetExtendedStyle( list->GetExtendedStyle() |  LVS_EX_FULLROWSELECT | LVS_EX_AUTOSIZECOLUMNS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
+	// list->SetExtendedStyle( list->GetExtendedStyle() |  LVS_EX_FULLROWSELECT | LVS_EX_AUTOSIZECOLUMNS);
 	list->SetExtendedStyle(list->GetExtendedStyle() | LVS_EX_FULLROWSELECT);
 	list->SetImageList(imageList, LVSIL_SMALL);
 
-	CFont* font = list->GetFont();
+	CFont *font = list->GetFont();
 	LOGFONT lf;
 	font->GetLogFont(&lf);
 	lf.lfHeight = -MulDiv(12, dpiY, 96);
 	font = new CFont();
 	font->CreateFontIndirect(&lf);
 	list->SetFont(font);
-	((CEdit*)GetDlgItem(IDC_FILER_VALUE))->SetFont(font);
+	// ===== DARK MODE: lista de registros =====
+	list->SetBkColor(RGB(28, 28, 28));
+	list->SetTextBkColor(RGB(28, 28, 28));
+	list->SetTextColor(RGB(200, 200, 200));
+	imageList->SetBkColor(RGB(28, 28, 28));
+	SetWindowTheme(list->GetSafeHwnd(), L"DarkMode_Explorer", NULL);
+	//===== FIM DARK MODE =====
+	// ===== DARK MODE: header da lista =====
+	CHeaderCtrl *pHeader = list->GetHeaderCtrl();
+	if (pHeader)
+	{
+		SetWindowTheme(pHeader->GetSafeHwnd(), L"", L"");
+		SetWindowSubclass(pHeader->GetSafeHwnd(), HeaderSubclassProc, 1, 0);
+	}
+	// ===== FIM DARK MODE =====
+	// ===== DARK MODE: campo de busca =====
+	CEdit *editFilter = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
+	SetWindowTheme(editFilter->GetSafeHwnd(), L"", L"");
+	// ===== FIM DARK MODE =====
+	((CEdit *)GetDlgItem(IDC_FILER_VALUE))->SetFont(font);
 	list->InsertColumn(MSIP_CALLS_COL_NAME, Translate(_T("Name")), LVCFMT_LEFT, accountSettings.callsWidth0 > 0 ? accountSettings.callsWidth0 : 160);
 	list->InsertColumn(MSIP_CALLS_COL_NUMBER, Translate(_T("Number")), LVCFMT_LEFT, accountSettings.callsWidth1 > 0 ? accountSettings.callsWidth1 : 100);
 	list->InsertColumn(MSIP_CALLS_COL_TIME, Translate(_T("Time")), LVCFMT_LEFT, accountSettings.callsWidth2 > 0 ? accountSettings.callsWidth2 : 135);
@@ -106,7 +178,7 @@ void Calls::PostNcDestroy()
 	delete this;
 }
 
-void Calls::DoDataExchange(CDataExchange* pDX)
+void Calls::DoDataExchange(CDataExchange *pDX)
 {
 	CBaseDialog::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_CALLS, m_SortItemsExListCtrl);
@@ -117,52 +189,75 @@ void Calls::OnTimer(UINT_PTR TimerVal)
 	ReloadTime();
 }
 
-
 BEGIN_MESSAGE_MAP(Calls, CBaseDialog)
-	ON_WM_CREATE()
-	ON_WM_TIMER()
-	ON_NOTIFY(HDN_ENDTRACK, 0, OnEndtrack)
-	ON_BN_CLICKED(IDOK, OnBnClickedOk)
-	ON_BN_CLICKED(IDCANCEL, OnBnClickedCancel)
-	ON_EN_CHANGE(IDC_FILER_VALUE, OnFilterValueChange)
-	ON_COMMAND(ID_CALL, OnMenuCall)
-	ON_COMMAND(ID_CHAT, OnMenuChat)
-	ON_COMMAND(ID_ADD, OnMenuAdd)
-	ON_COMMAND(ID_COPY, OnMenuCopy)
-	ON_COMMAND(ID_DELETE, OnMenuDelete)
-	ON_COMMAND(ID_EXPORT, OnMenuExport)
-	ON_NOTIFY(NM_DBLCLK, IDC_CALLS, &Calls::OnNMDblclkCalls)
-	ON_MESSAGE(WM_CONTEXTMENU, OnContextMenu)
+ON_WM_CREATE()
+ON_WM_TIMER()
+ON_WM_CTLCOLOR()
+ON_WM_ERASEBKGND()
+ON_NOTIFY(HDN_ENDTRACK, 0, OnEndtrack)
+ON_BN_CLICKED(IDOK, OnBnClickedOk)
+ON_BN_CLICKED(IDCANCEL, OnBnClickedCancel)
+ON_EN_CHANGE(IDC_FILER_VALUE, OnFilterValueChange)
+ON_COMMAND(ID_CALL, OnMenuCall)
+ON_COMMAND(ID_CHAT, OnMenuChat)
+ON_COMMAND(ID_ADD, OnMenuAdd)
+ON_COMMAND(ID_COPY, OnMenuCopy)
+ON_COMMAND(ID_DELETE, OnMenuDelete)
+ON_COMMAND(ID_EXPORT, OnMenuExport)
+ON_NOTIFY(NM_DBLCLK, IDC_CALLS, &Calls::OnNMDblclkCalls)
+ON_MESSAGE(WM_CONTEXTMENU, OnContextMenu)
 #ifdef _GLOBAL_VIDEO
-	ON_COMMAND(ID_VIDEOCALL, OnMenuCallVideo)
+ON_COMMAND(ID_VIDEOCALL, OnMenuCallVideo)
 #endif
 END_MESSAGE_MAP()
 
-BOOL Calls::PreTranslateMessage(MSG* pMsg)
+HBRUSH Calls::OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor)
+{
+	HBRUSH hbr = CBaseDialog::OnCtlColor(pDC, pWnd, nCtlColor);
+	pDC->SetBkColor(RGB(28, 28, 28));
+	pDC->SetTextColor(RGB(200, 200, 200));
+	return (HBRUSH)::CreateSolidBrush(RGB(28, 28, 28));
+}
+
+BOOL Calls::OnEraseBkgnd(CDC *pDC)
+{
+	CRect rect;
+	GetClientRect(&rect);
+	pDC->FillSolidRect(&rect, RGB(28, 28, 28));
+	return TRUE;
+}
+
+BOOL Calls::PreTranslateMessage(MSG *pMsg)
 {
 	BOOL catched = FALSE;
-	if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_ESCAPE) {
-		CEdit* edit = (CEdit*)GetDlgItem(IDC_FILER_VALUE);
-		if (edit == GetFocus()) {
+	if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_ESCAPE)
+	{
+		CEdit *edit = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
+		if (edit == GetFocus())
+		{
 			catched = TRUE;
-			if (isFiltered()) {
+			if (isFiltered())
+			{
 				filterReset();
 			}
 		}
 	}
-	if (!catched) {
+	if (!catched)
+	{
 		return CBaseDialog::PreTranslateMessage(pMsg);
 	}
-	else {
+	else
+	{
 		return TRUE;
 	}
 }
 
-void Calls::OnEndtrack(NMHDR* pNMHDR, LRESULT* pResult)
+void Calls::OnEndtrack(NMHDR *pNMHDR, LRESULT *pResult)
 {
-	HD_NOTIFY* phdn = (HD_NOTIFY*)pNMHDR;
+	HD_NOTIFY *phdn = (HD_NOTIFY *)pNMHDR;
 	int width = phdn->pitem->cxy;
-	switch (phdn->iItem) {
+	switch (phdn->iItem)
+	{
 	case 0:
 		accountSettings.callsWidth0 = width;
 		break;
@@ -183,31 +278,36 @@ void Calls::OnEndtrack(NMHDR* pNMHDR, LRESULT* pResult)
 	*pResult = 0;
 }
 
-
 void Calls::OnBnClickedOk()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		DefaultItemAction(list->GetNextSelectedItem(pos));
 	}
 }
 
 void Calls::DefaultItemAction(int i)
 {
-	if (accountSettings.defaultAction.IsEmpty()) {
+	if (accountSettings.defaultAction.IsEmpty())
+	{
 		MessageDlgOpen(accountSettings.singleMode);
 	}
-	else {
-		if (accountSettings.defaultAction == _T("call")) {
+	else
+	{
+		if (accountSettings.defaultAction == _T("call"))
+		{
 			OnMenuCall();
 		}
 #ifdef _GLOBAL_VIDEO
-		else if (accountSettings.defaultAction == _T("video")) {
+		else if (accountSettings.defaultAction == _T("video"))
+		{
 			OnMenuCallVideo();
 		}
 #endif
-		else {
+		else
+		{
 			OnMenuChat();
 		}
 	}
@@ -224,12 +324,15 @@ void Calls::OnFilterValueChange()
 	CallsLoad();
 }
 
-bool Calls::isFiltered(Call* pCall) {
-	CEdit* edit = (CEdit*)GetDlgItem(IDC_FILER_VALUE);
+bool Calls::isFiltered(Call *pCall)
+{
+	CEdit *edit = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
 	CString str;
 	edit->GetWindowText(str);
-	if (!str.IsEmpty()) {
-		if (!pCall) {
+	if (!str.IsEmpty())
+	{
+		if (!pCall)
+		{
 			return true;
 		}
 		str.MakeLower();
@@ -237,7 +340,8 @@ bool Calls::isFiltered(Call* pCall) {
 		CString number = pCall->number;
 		name.MakeLower();
 		number.MakeLower();
-		if (name.Find(str) == -1 && number.Find(str) == -1) {
+		if (name.Find(str) == -1 && number.Find(str) == -1)
+		{
 			return true;
 		}
 	}
@@ -246,7 +350,7 @@ bool Calls::isFiltered(Call* pCall) {
 
 void Calls::filterReset()
 {
-	CEdit* edit = (CEdit*)GetDlgItem(IDC_FILER_VALUE);
+	CEdit *edit = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
 	edit->SetWindowText(_T(""));
 }
 
@@ -254,56 +358,69 @@ LRESULT Calls::OnContextMenu(WPARAM wParam, LPARAM lParam)
 {
 	int x = GET_X_LPARAM(lParam);
 	int y = GET_Y_LPARAM(lParam);
-	POINT pt = { x, y };
+	POINT pt = {x, y};
 	RECT rc;
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
 	int selectedItem = -1;
 	int selectedItem2 = -1;
-	if (pos) {
+	if (pos)
+	{
 		selectedItem = list->GetNextSelectedItem(pos);
 	}
-	if (selectedItem != -1) {
+	if (selectedItem != -1)
+	{
 		selectedItem2 = list->GetNextSelectedItem(pos);
 	}
-	if (x != -1 || y != -1) {
+	if (x != -1 || y != -1)
+	{
 		ScreenToClient(&pt);
 		GetClientRect(&rc);
-		if (!PtInRect(&rc, pt)) {
+		if (!PtInRect(&rc, pt))
+		{
 			x = y = -1;
 		}
 	}
-	else {
-		if (selectedItem != -1) {
+	else
+	{
+		if (selectedItem != -1)
+		{
 			list->GetItemPosition(selectedItem, &pt);
 			list->ClientToScreen(&pt);
 			x = 40 + pt.x;
 			y = 8 + pt.y;
 		}
-		else {
+		else
+		{
 			::ClientToScreen((HWND)wParam, &pt);
 			x = 10 + pt.x;
 			y = 26 + pt.y;
 		}
 	}
-	if (x != -1 || y != -1) {
+	if (x != -1 || y != -1)
+	{
 		CMenu menu;
-		if (menu.LoadMenu(IDR_MENU_CONTACT)) {
-			CMenu* tracker = menu.GetSubMenu(0);
+		if (menu.LoadMenu(IDR_MENU_CONTACT))
+		{
+			CMenu *tracker = menu.GetSubMenu(0);
 			TranslateMenu(tracker->m_hMenu);
 			bool disabled = selectedItem == -1;
-			if (!disabled) {
+			if (!disabled)
+			{
 				POSITION pos = list->GetFirstSelectedItemPosition();
 				int i = list->GetNextSelectedItem(pos);
-				Call* pCall = (Call*)list->GetItemData(i);
-				if (mainDlg->pageContacts->FindContact(pCall->number)) {
+				Call *pCall = (Call *)list->GetItemData(i);
+				if (mainDlg->pageContacts->FindContact(pCall->number))
+				{
 					disabled = true;
 				}
 			}
 			tracker->ModifyMenu(ID_ADD, MF_BYCOMMAND | (disabled ? MF_DISABLED : 0), ID_ADD, Translate(_T("Add Contact")));
 			tracker->RemoveMenu(ID_EDIT, 0);
-			if (selectedItem != -1) {
-				if (selectedItem2 == -1) {
+			if (selectedItem != -1)
+			{
+				if (selectedItem2 == -1)
+				{
 					tracker->EnableMenuItem(ID_CALL, FALSE);
 #ifdef _GLOBAL_VIDEO
 					tracker->EnableMenuItem(ID_VIDEOCALL, FALSE);
@@ -311,7 +428,8 @@ LRESULT Calls::OnContextMenu(WPARAM wParam, LPARAM lParam)
 					tracker->EnableMenuItem(ID_CHAT, FALSE);
 					tracker->EnableMenuItem(ID_COPY, FALSE);
 				}
-				else {
+				else
+				{
 					tracker->EnableMenuItem(ID_CALL, TRUE);
 #ifdef _GLOBAL_VIDEO
 					tracker->EnableMenuItem(ID_VIDEOCALL, TRUE);
@@ -321,7 +439,8 @@ LRESULT Calls::OnContextMenu(WPARAM wParam, LPARAM lParam)
 				}
 				tracker->EnableMenuItem(ID_DELETE, FALSE);
 			}
-			else {
+			else
+			{
 				tracker->EnableMenuItem(ID_CALL, TRUE);
 #ifdef _GLOBAL_VIDEO
 				tracker->EnableMenuItem(ID_VIDEOCALL, TRUE);
@@ -333,14 +452,17 @@ LRESULT Calls::OnContextMenu(WPARAM wParam, LPARAM lParam)
 			tracker->AppendMenu(0, MF_SEPARATOR);
 			tracker->AppendMenu(MF_STRING, ID_EXPORT, Translate(_T("Export")));
 #ifdef _GLOBAL_VIDEO
-			if (accountSettings.disableVideo) {
+			if (accountSettings.disableVideo)
+			{
 				tracker->RemoveMenu(ID_VIDEOCALL, MF_BYCOMMAND);
 			}
 #endif
-			if (accountSettings.disableMessaging) {
+			if (accountSettings.disableMessaging)
+			{
 				tracker->RemoveMenu(ID_CHAT, MF_BYCOMMAND);
 			}
-			if (tracker->GetMenuItemCount() == 3) {
+			if (tracker->GetMenuItemCount() == 3)
+			{
 				tracker->RemoveMenu(0, MF_BYPOSITION);
 			}
 			tracker->TrackPopupMenu(0, x, y, this);
@@ -352,28 +474,33 @@ LRESULT Calls::OnContextMenu(WPARAM wParam, LPARAM lParam)
 
 void Calls::MessageDlgOpen(BOOL isCall, BOOL hasVideo)
 {
-	if (accountSettings.singleMode && mainDlg->messagesDlg->GetCallsCount() && isCall) {
+	if (accountSettings.singleMode && mainDlg->messagesDlg->GetCallsCount() && isCall)
+	{
 		mainDlg->GotoTab(0);
 		return;
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		int i = list->GetNextSelectedItem(pos);
-		Call* pCall = (Call*)list->GetItemData(i);
-		if (isCall) {
+		Call *pCall = (Call *)list->GetItemData(i);
+		if (isCall)
+		{
 			mainDlg->MakeCall(pCall->number, hasVideo, false, pCall->type != MSIP_CALL_OUT, pCall->name);
 		}
-		else {
+		else
+		{
 			mainDlg->MessagesOpen(pCall->number, false, pCall->type != MSIP_CALL_OUT, pCall->name);
 		}
 	}
 }
 
-void Calls::OnNMDblclkCalls(NMHDR* pNMHDR, LRESULT* pResult)
+void Calls::OnNMDblclkCalls(NMHDR *pNMHDR, LRESULT *pResult)
 {
 	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
-	if (pNMItemActivate->iItem != -1) {
+	if (pNMItemActivate->iItem != -1)
+	{
 		DefaultItemAction(pNMItemActivate->iItem);
 	}
 	*pResult = 0;
@@ -393,7 +520,8 @@ void Calls::OnMenuCallVideo()
 
 void Calls::OnMenuChat()
 {
-	if (!accountSettings.disableMessaging) {
+	if (!accountSettings.disableMessaging)
+	{
 		MessageDlgOpen();
 	}
 }
@@ -401,10 +529,10 @@ void Calls::OnMenuChat()
 void Calls::OnMenuAdd()
 {
 	mainDlg->pageContacts->OnMenuAdd();
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
 	int i = list->GetNextSelectedItem(pos);
-	Call* pCall = (Call*)list->GetItemData(i);
+	Call *pCall = (Call *)list->GetItemData(i);
 	Contact contact;
 	contact.number = pCall->number;
 	contact.name = pCall->name;
@@ -413,20 +541,22 @@ void Calls::OnMenuAdd()
 
 void Calls::OnMenuCopy()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		int i = list->GetNextSelectedItem(pos);
-		Call* pCall = (Call*)list->GetItemData(i);
+		Call *pCall = (Call *)list->GetItemData(i);
 		mainDlg->CopyStringToClipboard(pCall->number);
 	}
 }
 
 void Calls::OnMenuDelete()
 {
-	CListCtrl* pList = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *pList = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	POSITION pos = pList->GetFirstSelectedItemPosition();
-	while (pos) {
+	while (pos)
+	{
 		Delete(pList->GetNextSelectedItem(pos));
 		pos = pList->GetFirstSelectedItemPosition();
 	}
@@ -436,26 +566,29 @@ void Calls::OnMenuExport()
 {
 	TCHAR szFilters[] = _T("CSV Files (*.csv)|*.csv|XML Files (*.xml)|*.xml||");
 	CFileDialog dlgFile(FALSE, _T("csv"), _T("Calls"), OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY, szFilters, this);
-	if (dlgFile.DoModal() == IDOK) {
-		if (isFiltered()) {
+	if (dlgFile.DoModal() == IDOK)
+	{
+		if (isFiltered())
+		{
 			filterReset();
 		}
 		CString filename = dlgFile.GetPathName();
-		if (dlgFile.m_ofn.nFilterIndex == 2) {
-			if (dlgFile.GetFileExt().IsEmpty()) {
+		if (dlgFile.m_ofn.nFilterIndex == 2)
+		{
+			if (dlgFile.GetFileExt().IsEmpty())
+			{
 				filename.Append(_T(".xml"));
 			}
 			CMarkup xml;
 			xml.AddElem(_T("calls"));
 			xml.IntoElem();
-			CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+			CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 			int count = list->GetItemCount();
-			for (int i = 0; i < count; i++) {
-				Call* pCall = (Call*)list->GetItemData(i);
+			for (int i = 0; i < count; i++)
+			{
+				Call *pCall = (Call *)list->GetItemData(i);
 				xml.AddElem(_T("call"));
-				xml.AddAttrib(_T("type"), pCall->type == MSIP_CALL_OUT ? _T("out") : (pCall->type == MSIP_CALL_IN ? _T("in") :
-					(pCall->type == MSIP_CALL_MISS ? _T("miss") : _T("else"))
-					));
+				xml.AddAttrib(_T("type"), pCall->type == MSIP_CALL_OUT ? _T("out") : (pCall->type == MSIP_CALL_IN ? _T("in") : (pCall->type == MSIP_CALL_MISS ? _T("miss") : _T("else"))));
 				xml.AddAttrib(_T("name"), pCall->name);
 				xml.AddAttrib(_T("number"), pCall->number);
 				CString str;
@@ -467,20 +600,24 @@ void Calls::OnMenuExport()
 			}
 			CFile file;
 			CFileException fileException;
-			if (file.Open(filename, CFile::modeCreate | CFile::modeWrite, &fileException)) {
+			if (file.Open(filename, CFile::modeCreate | CFile::modeWrite, &fileException))
+			{
 				CStringA str = "<?xml version=\"1.0\"?>\r\n";
 				str.Append(MSIP::Utf8EncodeUni(xml.GetDoc()));
 				file.Write(str.GetBuffer(), str.GetLength());
 				file.Close();
 			}
 		}
-		else {
-			if (dlgFile.GetFileExt().IsEmpty()) {
+		else
+		{
+			if (dlgFile.GetFileExt().IsEmpty())
+			{
 				filename.Append(_T(".csv"));
 			}
 			CCSVFile CSVFile;
 			CSVFile.SetCodePage(CP_UTF8);
-			if (CSVFile.Open(filename, CCSVFile::modeCreate | CCSVFile::modeWrite | CFile::typeText | CFile::shareExclusive)) {
+			if (CSVFile.Open(filename, CCSVFile::modeCreate | CCSVFile::modeWrite | CFile::typeText | CFile::shareExclusive))
+			{
 				CStringArray arr;
 				arr.Add(_T("Type"));
 				arr.Add(_T("Name"));
@@ -489,14 +626,13 @@ void Calls::OnMenuExport()
 				arr.Add(_T("Duration"));
 				arr.Add(_T("Info"));
 				CSVFile.WriteData(arr);
-				CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+				CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 				int count = list->GetItemCount();
-				for (int i = 0; i < count; i++) {
-					Call* pCall = (Call*)list->GetItemData(i);
+				for (int i = 0; i < count; i++)
+				{
+					Call *pCall = (Call *)list->GetItemData(i);
 					arr.RemoveAll();
-					arr.Add(pCall->type == MSIP_CALL_OUT ? _T("out") : (pCall->type == MSIP_CALL_IN ? _T("in") :
-						(pCall->type == MSIP_CALL_MISS ? _T("miss") : _T("else"))
-						));
+					arr.Add(pCall->type == MSIP_CALL_OUT ? _T("out") : (pCall->type == MSIP_CALL_IN ? _T("in") : (pCall->type == MSIP_CALL_MISS ? _T("miss") : _T("else"))));
 					arr.Add(pCall->name);
 					arr.Add(pCall->number);
 					CString str;
@@ -513,11 +649,10 @@ void Calls::OnMenuExport()
 	}
 }
 
-
 void Calls::Delete(int i)
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
-	Call* pCall = (Call*)list->GetItemData(i);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
+	Call *pCall = (Call *)list->GetItemData(i);
 	pCall->number = _T("");
 	CallSave(pCall);
 	delete pCall;
@@ -534,26 +669,32 @@ void Calls::Add(pj_str_t id, CString number, CString name, int type, call_user_d
 {
 	SIPURI sipuri;
 	MSIP::ParseSIPURI(number, &sipuri);
-	
+
 	CString numberLocal;
-	if (sipuri.user.IsEmpty()) {
+	if (sipuri.user.IsEmpty())
+	{
 		numberLocal = sipuri.domain;
 		numberLocal.Append(sipuri.parameters);
 		numberLocal.Append(sipuri.commands);
 	}
-	else {
+	else
+	{
 		numberLocal = sipuri.user;
-		if (sipuri.parameters.IsEmpty() && (get_account_domain() == sipuri.domain || sipuri.domain.IsEmpty())) {
+		if (sipuri.parameters.IsEmpty() && (get_account_domain() == sipuri.domain || sipuri.domain.IsEmpty()))
+		{
 			numberLocal.Append(sipuri.commands);
 		}
-		else {
+		else
+		{
 			numberLocal.Append(_T("@"));
 			numberLocal.Append(sipuri.domain);
 			numberLocal.Append(sipuri.parameters);
 			numberLocal.Append(sipuri.commands);
 		}
-		if (!accountSettings.account.dialingPrefix.IsEmpty()) {
-			if (numberLocal.Find(accountSettings.account.dialingPrefix) == 0) {
+		if (!accountSettings.account.dialingPrefix.IsEmpty())
+		{
+			if (numberLocal.Find(accountSettings.account.dialingPrefix) == 0)
+			{
 				numberLocal = numberLocal.Mid(accountSettings.account.dialingPrefix.GetLength());
 			}
 		}
@@ -561,75 +702,87 @@ void Calls::Add(pj_str_t id, CString number, CString name, int type, call_user_d
 
 	CString callId = MSIP::PjToStr(&id);
 	int i = Get(callId);
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
-	if (i == -1) {
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
+	if (i == -1)
+	{
 		ReloadTime();
-			Call* pCall = new Call();
-			pCall->id = callId;
-			pCall->number = numberLocal;
-			pCall->name = name;
-			pCall->type = type;
-			pCall->time = CTime::GetCurrentTime().GetTime();
-			pCall->duration = 0;
-			pCall->key = GetNextKey();
-			Insert(pCall);
-			CallSave(pCall);
-			SaveKey();
+		Call *pCall = new Call();
+		pCall->id = callId;
+		pCall->number = numberLocal;
+		pCall->name = name;
+		pCall->type = type;
+		pCall->time = CTime::GetCurrentTime().GetTime();
+		pCall->duration = 0;
+		pCall->key = GetNextKey();
+		Insert(pCall);
+		CallSave(pCall);
+		SaveKey();
 	}
-	else {
+	else
+	{
 		bool changed = false;
-		Call* pCall = (Call*)list->GetItemData(i);
-		if (pCall->number != numberLocal) {
+		Call *pCall = (Call *)list->GetItemData(i);
+		if (pCall->number != numberLocal)
+		{
 			pCall->number = numberLocal;
 			list->SetItemText(i, MSIP_CALLS_COL_NUMBER, pCall->number);
 			changed = true;
 		}
-		if (pCall->name != name) {
+		if (pCall->name != name)
+		{
 			pCall->name = name;
 			list->SetItemText(i, MSIP_CALLS_COL_NAME, pCall->name);
 			changed = true;
 		}
-		if (pCall->type != type) {
+		if (pCall->type != type)
+		{
 			pCall->type = type;
 			list->SetItem(i, 0, LVIF_IMAGE, NULL, type, 0, 0, 0);
 			changed = true;
 		}
-		if (changed) {
+		if (changed)
+		{
 			CallSave(pCall);
 		}
 	}
 }
 
-void Calls::SetName(pj_str_t id, CString name) {
+void Calls::SetName(pj_str_t id, CString name)
+{
 	CString callId = MSIP::PjToStr(&id);
 	int i = Get(callId);
-	if (i != -1) {
-		CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
-		Call* pCall = (Call*)list->GetItemData(i);
+	if (i != -1)
+	{
+		CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
+		Call *pCall = (Call *)list->GetItemData(i);
 		pCall->name = name;
 		list->SetItemText(i, MSIP_CALLS_COL_NAME, name);
 		CallSave(pCall);
 	}
 }
 
-void Calls::SetDuration(pj_str_t id, int sec, int total) {
+void Calls::SetDuration(pj_str_t id, int sec, int total)
+{
 	CString callId = MSIP::PjToStr(&id);
 	int i = Get(callId);
-	if (i != -1) {
-		CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
-		Call* pCall = (Call*)list->GetItemData(i);
+	if (i != -1)
+	{
+		CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
+		Call *pCall = (Call *)list->GetItemData(i);
 		pCall->duration = sec;
 		list->SetItemText(i, MSIP_CALLS_COL_DURATION, MSIP::GetDuration(pCall->duration));
 		CallSave(pCall);
 	}
 }
 
-void Calls::SetInfo(pj_str_t id, CString str) {
+void Calls::SetInfo(pj_str_t id, CString str)
+{
 	CString callId = MSIP::PjToStr(&id);
 	int i = Get(callId);
-	if (i != -1) {
-		CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
-		Call* pCall = (Call*)list->GetItemData(i);
+	if (i != -1)
+	{
+		CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
+		Call *pCall = (Call *)list->GetItemData(i);
 		pCall->info = str;
 		list->SetItemText(i, MSIP_CALLS_COL_INFO, str);
 		CallSave(pCall);
@@ -638,28 +791,30 @@ void Calls::SetInfo(pj_str_t id, CString str) {
 
 int Calls::Get(CString id)
 {
-	if (isFiltered()) {
+	if (isFiltered())
+	{
 		filterReset();
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	int count = list->GetItemCount();
 	for (int i = 0; i < count; i++)
 	{
-		Call* pCall = (Call*)list->GetItemData(i);
-		if (pCall->id == id) {
+		Call *pCall = (Call *)list->GetItemData(i);
+		if (pCall->id == id)
+		{
 			return i;
 		}
 	}
 	return -1;
 }
 
-
-void Calls::Insert(Call* pCall, int pos)
+void Calls::Insert(Call *pCall, int pos)
 {
-	if (isFiltered(pCall)) {
+	if (isFiltered(pCall))
+	{
 		return;
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	int i = list->InsertItem(LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE, pos, pCall->name, 0, 0, pCall->type, (LPARAM)pCall);
 	list->SetItemText(i, MSIP_CALLS_COL_NUMBER, pCall->number);
 	list->SetItemText(i, MSIP_CALLS_COL_TIME, FormatTime(pCall->time));
@@ -669,51 +824,55 @@ void Calls::Insert(Call* pCall, int pos)
 
 void Calls::CallsClear()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 	int count = list->GetItemCount();
-	for (int i = 0; i < count; i++) {
-		Call* pCall = (Call*)list->GetItemData(i);
+	for (int i = 0; i < count; i++)
+	{
+		Call *pCall = (Call *)list->GetItemData(i);
 		delete pCall;
 	}
 	list->DeleteAllItems();
 }
 
-CString Calls::FormatTime(int time, CTime* pTimeNow)
+CString Calls::FormatTime(int time, CTime *pTimeNow)
 {
 	CTime timeNow;
-	if (!pTimeNow) {
+	if (!pTimeNow)
+	{
 		timeNow = CTime::GetCurrentTime();
 		pTimeNow = &timeNow;
 	}
-	if (!lastDay) {
+	if (!lastDay)
+	{
 		lastDay = pTimeNow->GetDay();
 	}
 	CTime timeCall(time);
 	return timeCall.Format(
 		pTimeNow->GetYear() == timeCall.GetYear() &&
-		pTimeNow->GetMonth() == timeCall.GetMonth() &&
-		pTimeNow->GetDay() == timeCall.GetDay()
-		? _T("%X") : _T("%c")
-	);
+				pTimeNow->GetMonth() == timeCall.GetMonth() &&
+				pTimeNow->GetDay() == timeCall.GetDay()
+			? _T("%X")
+			: _T("%c"));
 }
 
 void Calls::ReloadTime()
 {
 	CTime timeNow = CTime::GetCurrentTime();
-	if (lastDay && lastDay != timeNow.GetDay()) {
+	if (lastDay && lastDay != timeNow.GetDay())
+	{
 		lastDay = timeNow.GetDay();
-		CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CALLS);
+		CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CALLS);
 		int count = list->GetItemCount();
-		for (int i = 0; i < count; i++) {
-			Call* pCall = (Call*)list->GetItemData(i);
+		for (int i = 0; i < count; i++)
+		{
+			Call *pCall = (Call *)list->GetItemData(i);
 			CTime timeCall(pCall->time);
 			list->SetItemText(i, MSIP_CALLS_COL_TIME, FormatTime(pCall->time, &timeNow));
 		}
 	}
 }
 
-
-void Calls::CallSave(Call* pCall)
+void Calls::CallSave(Call *pCall)
 {
 	CString key;
 	// pCall->number == "" means delete
@@ -735,41 +894,53 @@ void Calls::CallsLoad()
 	int currTime = CTime::GetCurrentTime().GetTime();
 	int i = 0;
 	int callsLastKey = GetNextKey(true);
-	while (true) {
+	while (true)
+	{
 		key.Format(_T("%d"), i);
-		if (GetPrivateProfileString(_T("Calls"), key, NULL, ptr, 256, accountSettings.iniFile)) {
-			if (val != _T("null")) {
-				Call* pCall = new Call();
+		if (GetPrivateProfileString(_T("Calls"), key, NULL, ptr, 256, accountSettings.iniFile))
+		{
+			if (val != _T("null"))
+			{
+				Call *pCall = new Call();
 				CallDecode(ptr, pCall);
-				if (pCall->time > maxTime) {
+				if (pCall->time > maxTime)
+				{
 					maxTime = pCall->time;
 					lastKey = i;
 				}
 				bool skip = false;
-				if (isFiltered(pCall)) {
+				if (isFiltered(pCall))
+				{
 					skip = true;
 					delete pCall;
 				}
-				if (!skip) {
+				if (!skip)
+				{
 					pCall->key = i;
-					if (pos == -1) {
-						if (prevTime > pCall->time) {
+					if (pos == -1)
+					{
+						if (prevTime > pCall->time)
+						{
 							pos = inserted;
 						}
 					}
-					if (pos == -1) {
+					if (pos == -1)
+					{
 						Insert(pCall);
 						prevTime = pCall->time;
 					}
-					else {
+					else
+					{
 						Insert(pCall, pos);
 					}
 					inserted++;
 				}
 			}
 		}
-		else {
-			if (callsLastKey <= i) {
+		else
+		{
+			if (callsLastKey <= i)
+			{
 				break;
 			}
 		}
@@ -778,14 +949,14 @@ void Calls::CallsLoad()
 	m_SortItemsExListCtrl.SortColumn(m_SortItemsExListCtrl.GetSortColumn(), m_SortItemsExListCtrl.IsAscending());
 }
 
-CString Calls::CallEncode(Call* pCall)
+CString Calls::CallEncode(Call *pCall)
 {
 	CString data;
 	data.Format(_T("%s;%s;%d;%d;%d;%s"), pCall->number, pCall->name, pCall->type, pCall->time, pCall->duration, pCall->info);
 	return data;
 }
 
-void Calls::CallDecode(CString str, Call* pCall)
+void Calls::CallDecode(CString str, Call *pCall)
 {
 	pCall->number = str;
 	pCall->name = pCall->number;
@@ -812,7 +983,8 @@ void Calls::CallDecode(CString str, Call* pCall)
 			if (end != -1)
 			{
 				pCall->type = atoi(CStringA(str.Mid(begin, end - begin)));
-				if (pCall->type > 3 || pCall->type < 0) {
+				if (pCall->type > 3 || pCall->type < 0)
+				{
 					pCall->type = 0;
 				}
 				begin = end + 1;
@@ -833,7 +1005,8 @@ void Calls::CallDecode(CString str, Call* pCall)
 							begin = end + 1;
 							end = str.Find(';', begin);
 						}
-						else {
+						else
+						{
 							pCall->info = str.Mid(begin);
 						}
 					}
@@ -854,12 +1027,15 @@ int Calls::GetNextKey(bool noInc)
 	GetPrivateProfileString(section, _T("callsLastKey"), _T("-1"), ptr, 256, accountSettings.iniFile);
 	str.ReleaseBuffer();
 	int key = _wtoi(str);
-	if (key != -1) {
+	if (key != -1)
+	{
 		lastKey = key;
 	}
-	if (!noInc) {
+	if (!noInc)
+	{
 		lastKey++;
-		if (lastKey >= 1000) {
+		if (lastKey >= 1000)
+		{
 			lastKey = 0;
 		}
 	}
