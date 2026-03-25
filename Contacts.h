@@ -24,32 +24,34 @@
 #include "BaseDialog.h"
 #include "CListCtrl_SortItemsEx.h"
 
-class Contacts :
-	public CBaseDialog
+class Contacts : public CBaseDialog
 {
 public:
-	Contacts(CWnd* pParent = NULL);	// standard constructor
+	Contacts(CWnd *pParent = NULL); // standard constructor
 	~Contacts();
-	enum { IDD = IDD_CONTACTS };
+	enum
+	{
+		IDD = IDD_CONTACTS
+	};
 	void TabFocusSet() override {};
-	bool GotoTab(int i, CTabCtrl* tab) { return false; };
+	bool GotoTab(int i, CTabCtrl *tab) { return false; };
 	void ProcessCommand(CString str) override {};
 
 	CListCtrl_SortItemsEx m_SortItemsExListCtrl;
 
-	AddDlg* addDlg;
+	AddDlg *addDlg;
 
-	CList<Contact*> contacts;
+	CList<Contact *> contacts;
 
-	bool ContactPrepare(Contact* contact);
-	void ContactCreate(CListCtrl* list, Contact* pContact, bool subscribe = true);
-	void ListAppend(CListCtrl* list, Contact* contact, bool subscribe = true);
-	bool ContactUpdate(CListCtrl* list, int i, Contact* contact, Contact* newContact, CStringList* fields);
-	void ContactsAdd(CArray<ContactWithFields*> *contacts, bool directory = false);
-	bool ContactAdd(Contact contact, BOOL save = FALSE, BOOL load = FALSE, CStringList* fields = NULL, CString oldNumber = _T(""), bool manual = false);
+	bool ContactPrepare(Contact *contact);
+	void ContactCreate(CListCtrl *list, Contact *pContact, bool subscribe = true);
+	void ListAppend(CListCtrl *list, Contact *contact, bool subscribe = true);
+	bool ContactUpdate(CListCtrl *list, int i, Contact *contact, Contact *newContact, CStringList *fields);
+	void ContactsAdd(CArray<ContactWithFields *> *contacts, bool directory = false);
+	bool ContactAdd(Contact contact, BOOL save = FALSE, BOOL load = FALSE, CStringList *fields = NULL, CString oldNumber = _T(""), bool manual = false);
 
 	void ContactDelete(int i);
-	void ContactDeleteRaw(Contact* contact);
+	void ContactDeleteRaw(Contact *contact);
 	void ContactsSave();
 	void ContactsLoad();
 	bool isFiltered(Contact *pContact = NULL);
@@ -59,16 +61,16 @@ public:
 	int DeleteCanditates();
 
 	void UpdateCallButton();
-	Contact* FindContact(CString number, bool subscribed = false);
+	Contact *FindContact(CString number, bool subscribed = false);
 	CString GetNameByNumber(CString number);
 	void PresenceSubsribeOne(Contact *pContact);
 	void PresenceUnsubsribeOne(Contact *pContact);
 	void PresenceSubscribe();
-	void PresenceReset(Contact* pContact = NULL);
-	void PresenceReceived(CString *buddyNumber, int image, bool ringing, CString* info, bool fromUsersDirectory = false);
+	void PresenceReset(Contact *pContact = NULL);
+	void PresenceReceived(CString *buddyNumber, int image, bool ringing, CString *info, bool fromUsersDirectory = false);
 	void OnTimerContactsBlink();
 	void OnCreated();
-	bool Import(CString filename, CArray<ContactWithFields*> &contacts, bool directory = false);
+	bool Import(CString filename, CArray<ContactWithFields *> &contacts, bool directory = false);
 
 private:
 	void ContactDecode(CString str, Contact &contact);
@@ -78,30 +80,32 @@ private:
 protected:
 	virtual BOOL OnInitDialog();
 	virtual void PostNcDestroy();
-	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV support
-	virtual BOOL PreTranslateMessage(MSG* pMsg);
+	virtual void DoDataExchange(CDataExchange *pDX); // DDX/DDV support
+	virtual BOOL PreTranslateMessage(MSG *pMsg);
 	DECLARE_MESSAGE_MAP()
 public:
+	// Adicionar no message map declarations:
+	afx_msg HBRUSH OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor);
+	afx_msg BOOL OnEraseBkgnd(CDC *pDC);
 	afx_msg void OnTimer(UINT_PTR TimerVal);
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedCancel();
 	afx_msg void OnFilterValueChange();
 	afx_msg void OnMenuCallPickup();
-	afx_msg void OnMenuCall(); 
-	afx_msg void OnMenuCallPhone(); 
-	afx_msg void OnMenuCallMobile(); 
+	afx_msg void OnMenuCall();
+	afx_msg void OnMenuCallPhone();
+	afx_msg void OnMenuCallMobile();
 	afx_msg void OnMenuChat();
-	afx_msg void OnMenuAdd(); 
-	afx_msg void OnMenuEdit(); 
-	afx_msg void OnMenuCopy(); 
-	afx_msg void OnMenuDelete(); 
+	afx_msg void OnMenuAdd();
+	afx_msg void OnMenuEdit();
+	afx_msg void OnMenuCopy();
+	afx_msg void OnMenuDelete();
 	afx_msg void OnMenuImport();
 	afx_msg void OnMenuExport();
-	afx_msg LRESULT OnContextMenu(WPARAM wParam,LPARAM lParam);
+	afx_msg LRESULT OnContextMenu(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnNMDblclkContacts(NMHDR *pNMHDR, LRESULT *pResult);
-	afx_msg void OnEndtrack(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnEndtrack(NMHDR *pNMHDR, LRESULT *pResult);
 #ifdef _GLOBAL_VIDEO
-	afx_msg void OnMenuCallVideo(); 
+	afx_msg void OnMenuCallVideo();
 #endif
 };
-

@@ -28,11 +28,69 @@
 #include "Transfer.h"
 #include "afxinet.h"
 #include "MessageBoxX.h"
+#include <commctrl.h>
+#pragma comment(lib, "comctl32.lib")
+#include <uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
 
 static UINT_PTR blinkTimer = NULL;
 static bool blinkState = false;
 
-Contacts::Contacts(CWnd* pParent /*=NULL*/)
+// Contacts.cpp — APENAS se não usar extern de Calls.cpp
+static LRESULT CALLBACK ContactsHeaderSubclassProc(HWND hWnd, UINT uMsg, WPARAM wParam,
+												   LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+	if (uMsg == WM_PAINT)
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = ::BeginPaint(hWnd, &ps);
+		RECT rcClient;
+		::GetClientRect(hWnd, &rcClient);
+		::FillRect(hdc, &rcClient, ::CreateSolidBrush(RGB(28, 28, 28)));
+		HFONT hFont = (HFONT)::SendMessage(hWnd, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, RGB(180, 20, 90)); // Rosa cyberpunk
+		int nCount = Header_GetItemCount(hWnd);
+		for (int i = 0; i < nCount; i++)
+		{
+			RECT rcItem;
+			Header_GetItemRect(hWnd, i, &rcItem);
+			// Linha separadora vertical e horizontal
+			HPEN hPen = ::CreatePen(PS_SOLID, 1, RGB(55, 55, 55));
+			HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+			::MoveToEx(hdc, rcItem.right - 1, rcItem.top, NULL);
+			::LineTo(hdc, rcItem.right - 1, rcItem.bottom);
+			::MoveToEx(hdc, rcItem.left, rcItem.bottom - 1, NULL);
+			::LineTo(hdc, rcItem.right, rcItem.bottom - 1);
+			::SelectObject(hdc, hOldPen);
+			::DeleteObject(hPen);
+			// Texto da coluna
+			TCHAR szText[256] = {0};
+			HDITEM hdi = {0};
+			hdi.mask = HDI_TEXT | HDI_FORMAT;
+			hdi.pszText = szText;
+			hdi.cchTextMax = 255;
+			Header_GetItem(hWnd, i, &hdi);
+			rcItem.left += 6;
+			rcItem.right -= 4;
+			UINT fmt = DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS;
+			if (hdi.fmt & HDF_RIGHT)
+				fmt |= DT_RIGHT;
+			else if (hdi.fmt & HDF_CENTER)
+				fmt |= DT_CENTER;
+			else
+				fmt |= DT_LEFT;
+			::DrawText(hdc, szText, -1, &rcItem, fmt);
+		}
+		::SelectObject(hdc, hOldFont);
+		::EndPaint(hWnd, &ps);
+		return 0;
+	}
+	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+Contacts::Contacts(CWnd *pParent /*=NULL*/)
 	: CBaseDialog(Contacts::IDD, pParent)
 {
 	Create(IDD, pParent);
@@ -54,25 +112,65 @@ BOOL Contacts::OnInitDialog()
 
 	addDlg = new AddDlg(this);
 
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
-	//list->SetExtendedStyle(list->GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_AUTOSIZECOLUMNS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
+	// list->SetExtendedStyle(list->GetExtendedStyle() | LVS_EX_FULLROWSELECT | LVS_EX_AUTOSIZECOLUMNS);
 	list->SetExtendedStyle(list->GetExtendedStyle() | LVS_EX_FULLROWSELECT);
 	list->SetImageList(mainDlg->imageListStatus, LVSIL_SMALL);
 
-	CFont* font = list->GetFont();
+	// Cores da lista
+	list->SetBkColor(RGB(28, 28, 28));
+	list->SetTextBkColor(RGB(28, 28, 28));
+	list->SetTextColor(RGB(200, 200, 200));
+
+	// Dark mode nativo do Explorer (scrollbar, seleção, etc.)
+	SetWindowTheme(list->GetSafeHwnd(), L"DarkMode_Explorer", NULL);
+
+	// ImageList de ícones — fundo escuro (se existir)
+	CImageList *pImgList = list->GetImageList(LVSIL_SMALL);
+	if (pImgList)
+	{
+		pImgList->SetBkColor(RGB(28, 28, 28));
+	}
+
+	// ── Header dark com texto rosa ────────────────────────────────────────────
+	CHeaderCtrl *pHeader = list->GetHeaderCtrl();
+	if (pHeader)
+	{
+		SetWindowTheme(pHeader->GetSafeHwnd(), L"", L"");
+		SetWindowSubclass(pHeader->GetSafeHwnd(), ContactsHeaderSubclassProc, 1, 0);
+		// Se usar extern: substitua ContactsHeaderSubclassProc por HeaderSubclassProc
+	}
+
+	CFont *font = list->GetFont();
 	LOGFONT lf;
 	font->GetLogFont(&lf);
 	lf.lfHeight = -MulDiv(12, dpiY, 96);
 	font = new CFont();
 	font->CreateFontIndirect(&lf);
 	list->SetFont(font);
-	((CEdit*)GetDlgItem(IDC_FILER_VALUE))->SetFont(font);
+	((CEdit *)GetDlgItem(IDC_FILER_VALUE))->SetFont(font);
 
 	list->InsertColumn(0, Translate(_T("Name")), LVCFMT_LEFT, accountSettings.contactsWidth0 > 0 ? accountSettings.contactsWidth0 : 160);
 	list->InsertColumn(1, Translate(_T("Number")), LVCFMT_LEFT, accountSettings.contactsWidth1 > 0 ? accountSettings.contactsWidth1 : 100);
 	list->InsertColumn(2, Translate(_T("Info")), LVCFMT_LEFT, accountSettings.contactsWidth2 > 0 ? accountSettings.contactsWidth2 : 120);
 	ContactsLoad();
 
+	return TRUE;
+}
+
+HBRUSH Contacts::OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor)
+{
+	HBRUSH hbr = CBaseDialog::OnCtlColor(pDC, pWnd, nCtlColor);
+	pDC->SetBkColor(RGB(28, 28, 28));
+	pDC->SetTextColor(RGB(200, 200, 200));
+	return (HBRUSH)::CreateSolidBrush(RGB(28, 28, 28));
+}
+
+BOOL Contacts::OnEraseBkgnd(CDC *pDC)
+{
+	CRect rect;
+	GetClientRect(&rect);
+	pDC->FillSolidRect(&rect, RGB(28, 28, 28));
 	return TRUE;
 }
 
@@ -88,76 +186,88 @@ void Contacts::PostNcDestroy()
 	delete this;
 }
 
-void Contacts::DoDataExchange(CDataExchange* pDX)
+void Contacts::DoDataExchange(CDataExchange *pDX)
 {
 	CBaseDialog::DoDataExchange(pDX);
 	DDX_Control(pDX, IDC_CONTACTS, m_SortItemsExListCtrl);
 }
 
 BEGIN_MESSAGE_MAP(Contacts, CBaseDialog)
-	ON_WM_TIMER()
-	ON_NOTIFY(HDN_ENDTRACK, 0, OnEndtrack)
-	ON_BN_CLICKED(IDOK, OnBnClickedOk)
-	ON_BN_CLICKED(IDCANCEL, OnBnClickedCancel)
-	ON_EN_CHANGE(IDC_FILER_VALUE, OnFilterValueChange)
-	ON_COMMAND(ID_CALL_PICKUP, OnMenuCallPickup)
-	ON_COMMAND(ID_CALL, OnMenuCall)
-	ON_COMMAND(ID_CALL_PHONE, OnMenuCallPhone)
-	ON_COMMAND(ID_CALL_MOBILE, OnMenuCallMobile)
-	ON_COMMAND(ID_CHAT, OnMenuChat)
-	ON_COMMAND(ID_ADD, OnMenuAdd)
-	ON_COMMAND(ID_EDIT, OnMenuEdit)
-	ON_COMMAND(ID_COPY, OnMenuCopy)
-	ON_COMMAND(ID_DELETE, OnMenuDelete)
-	ON_COMMAND(ID_IMPORT, OnMenuImport)
-	ON_COMMAND(ID_EXPORT, OnMenuExport)
-	ON_MESSAGE(WM_CONTEXTMENU, OnContextMenu)
-	ON_NOTIFY(NM_DBLCLK, IDC_CONTACTS, &Contacts::OnNMDblclkContacts)
+ON_WM_TIMER()
+ON_NOTIFY(HDN_ENDTRACK, 0, OnEndtrack)
+ON_BN_CLICKED(IDOK, OnBnClickedOk)
+ON_BN_CLICKED(IDCANCEL, OnBnClickedCancel)
+ON_EN_CHANGE(IDC_FILER_VALUE, OnFilterValueChange)
+ON_COMMAND(ID_CALL_PICKUP, OnMenuCallPickup)
+ON_COMMAND(ID_CALL, OnMenuCall)
+ON_COMMAND(ID_CALL_PHONE, OnMenuCallPhone)
+ON_COMMAND(ID_CALL_MOBILE, OnMenuCallMobile)
+ON_COMMAND(ID_CHAT, OnMenuChat)
+ON_COMMAND(ID_ADD, OnMenuAdd)
+ON_COMMAND(ID_EDIT, OnMenuEdit)
+ON_COMMAND(ID_COPY, OnMenuCopy)
+ON_COMMAND(ID_DELETE, OnMenuDelete)
+ON_COMMAND(ID_IMPORT, OnMenuImport)
+ON_COMMAND(ID_EXPORT, OnMenuExport)
+ON_MESSAGE(WM_CONTEXTMENU, OnContextMenu)
+ON_NOTIFY(NM_DBLCLK, IDC_CONTACTS, &Contacts::OnNMDblclkContacts)
+ON_WM_CTLCOLOR()
+ON_WM_ERASEBKGND()
 #ifdef _GLOBAL_VIDEO
-	ON_COMMAND(ID_VIDEOCALL, OnMenuCallVideo)
+ON_COMMAND(ID_VIDEOCALL, OnMenuCallVideo)
 #endif
 END_MESSAGE_MAP()
 
 void Contacts::OnTimer(UINT_PTR TimerVal)
 {
-	if (TimerVal == IDT_TIMER_CONTACTS_BLINK) {
+	if (TimerVal == IDT_TIMER_CONTACTS_BLINK)
+	{
 		OnTimerContactsBlink();
 	}
 }
 
-BOOL Contacts::PreTranslateMessage(MSG* pMsg)
+BOOL Contacts::PreTranslateMessage(MSG *pMsg)
 {
 	BOOL catched = FALSE;
-	if (pMsg->message == WM_KEYDOWN) {
-		if (pMsg->wParam == VK_ESCAPE) {
-			CEdit* edit = (CEdit*)GetDlgItem(IDC_FILER_VALUE);
-			if (edit == GetFocus()) {
+	if (pMsg->message == WM_KEYDOWN)
+	{
+		if (pMsg->wParam == VK_ESCAPE)
+		{
+			CEdit *edit = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
+			if (edit == GetFocus())
+			{
 				catched = TRUE;
-				if (isFiltered()) {
+				if (isFiltered())
+				{
 					filterReset();
 				}
 			}
 		}
-		if (pMsg->wParam == VK_DELETE) {
-			if ((CListCtrl*)GetDlgItem(IDC_CONTACTS) == GetFocus()) {
+		if (pMsg->wParam == VK_DELETE)
+		{
+			if ((CListCtrl *)GetDlgItem(IDC_CONTACTS) == GetFocus())
+			{
 				catched = TRUE;
 				OnMenuDelete();
 			}
 		}
 	}
-	if (!catched) {
+	if (!catched)
+	{
 		return CBaseDialog::PreTranslateMessage(pMsg);
 	}
-	else {
+	else
+	{
 		return TRUE;
 	}
 }
 
-void Contacts::OnEndtrack(NMHDR* pNMHDR, LRESULT* pResult)
+void Contacts::OnEndtrack(NMHDR *pNMHDR, LRESULT *pResult)
 {
-	HD_NOTIFY* phdn = (HD_NOTIFY*)pNMHDR;
+	HD_NOTIFY *phdn = (HD_NOTIFY *)pNMHDR;
 	int width = phdn->pitem->cxy;
-	switch (phdn->iItem) {
+	switch (phdn->iItem)
+	{
 	case 0:
 		accountSettings.contactsWidth0 = width;
 		break;
@@ -174,40 +284,50 @@ void Contacts::OnEndtrack(NMHDR* pNMHDR, LRESULT* pResult)
 
 void Contacts::OnBnClickedOk()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		DefaultItemAction(list->GetNextSelectedItem(pos));
 	}
 }
 
 void Contacts::DefaultItemAction(int i)
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
-	Contact* contact = (Contact*)list->GetItemData(i);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
+	Contact *contact = (Contact *)list->GetItemData(i);
 	bool pickup = contact->ringing;
 	pickup = false;
-	if (pickup && mainDlg->CommandCallPickup(contact->number)) {
+	if (pickup && mainDlg->CommandCallPickup(contact->number))
+	{
 	}
-	else {
-		MessagesContact* messagesContact = mainDlg->messagesDlg->GetMessageContact();
-		if (messagesContact && messagesContact->callId != -1) {
+	else
+	{
+		MessagesContact *messagesContact = mainDlg->messagesDlg->GetMessageContact();
+		if (messagesContact && messagesContact->callId != -1)
+		{
 			mainDlg->OpenTransferDlg(mainDlg, MSIP_ACTION_TRANSFER, PJSUA_INVALID_ID, contact);
 		}
-		else {
-			if (accountSettings.defaultAction.IsEmpty()) {
+		else
+		{
+			if (accountSettings.defaultAction.IsEmpty())
+			{
 				MessageDlgOpen(accountSettings.singleMode);
 			}
-			else {
-				if (accountSettings.defaultAction == _T("call")) {
+			else
+			{
+				if (accountSettings.defaultAction == _T("call"))
+				{
 					OnMenuCall();
 				}
 #ifdef _GLOBAL_VIDEO
-				else if (accountSettings.defaultAction == _T("video")) {
+				else if (accountSettings.defaultAction == _T("video"))
+				{
 					OnMenuCallVideo();
 				}
 #endif
-				else {
+				else
+				{
 					OnMenuChat();
 				}
 			}
@@ -220,12 +340,15 @@ void Contacts::OnBnClickedCancel()
 	mainDlg->ShowWindow(SW_HIDE);
 }
 
-bool Contacts::isFiltered(Contact* contact) {
-	CEdit* edit = (CEdit*)GetDlgItem(IDC_FILER_VALUE);
+bool Contacts::isFiltered(Contact *contact)
+{
+	CEdit *edit = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
 	CString str;
 	edit->GetWindowText(str);
-	if (!str.IsEmpty()) {
-		if (!contact) {
+	if (!str.IsEmpty())
+	{
+		if (!contact)
+		{
 			return true;
 		}
 		str.MakeLower();
@@ -233,7 +356,8 @@ bool Contacts::isFiltered(Contact* contact) {
 		CString number = contact->number;
 		name.MakeLower();
 		number.MakeLower();
-		if (name.Find(str) == -1 && number.Find(str) == -1) {
+		if (name.Find(str) == -1 && number.Find(str) == -1)
+		{
 			return true;
 		}
 	}
@@ -242,18 +366,20 @@ bool Contacts::isFiltered(Contact* contact) {
 
 void Contacts::filterReset()
 {
-	CEdit* edit = (CEdit*)GetDlgItem(IDC_FILER_VALUE);
+	CEdit *edit = (CEdit *)GetDlgItem(IDC_FILER_VALUE);
 	edit->SetWindowText(_T(""));
 }
 
 void Contacts::OnFilterValueChange()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	list->DeleteAllItems();
 	POSITION pos = contacts.GetHeadPosition();
-	while (pos) {
-		Contact* contact = contacts.GetNext(pos);
-		if (!isFiltered(contact)) {
+	while (pos)
+	{
+		Contact *contact = contacts.GetNext(pos);
+		if (!isFiltered(contact))
+		{
 			ListAppend(list, contact);
 		}
 	}
@@ -264,43 +390,53 @@ LRESULT Contacts::OnContextMenu(WPARAM wParam, LPARAM lParam)
 {
 	int x = GET_X_LPARAM(lParam);
 	int y = GET_Y_LPARAM(lParam);
-	POINT pt = { x, y };
+	POINT pt = {x, y};
 	RECT rc;
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
 	int selectedItem = -1;
-	if (pos) {
+	if (pos)
+	{
 		selectedItem = list->GetNextSelectedItem(pos);
 	}
-	if (x != -1 || y != -1) {
+	if (x != -1 || y != -1)
+	{
 		ScreenToClient(&pt);
 		GetClientRect(&rc);
-		if (!PtInRect(&rc, pt)) {
+		if (!PtInRect(&rc, pt))
+		{
 			x = y = -1;
 		}
 	}
-	else {
-		if (selectedItem != -1) {
+	else
+	{
+		if (selectedItem != -1)
+		{
 			list->GetItemPosition(selectedItem, &pt);
 			list->ClientToScreen(&pt);
 			x = 40 + pt.x;
 			y = 8 + pt.y;
 		}
-		else {
+		else
+		{
 			::ClientToScreen((HWND)wParam, &pt);
 			x = 10 + pt.x;
 			y = 10 + pt.y;
 		}
 	}
-	if (x != -1 || y != -1) {
+	if (x != -1 || y != -1)
+	{
 		CMenu menu;
 		menu.LoadMenu(IDR_MENU_CONTACT);
-		CMenu* tracker = menu.GetSubMenu(0);
+		CMenu *tracker = menu.GetSubMenu(0);
 		TranslateMenu(tracker->m_hMenu);
-		if (selectedItem != -1) {
-			Contact* pContact = (Contact*)list->GetItemData(selectedItem);
-			if (pContact->ringing) {
-				if (accountSettings.enableFeatureCodeCP && !accountSettings.featureCodeCP.IsEmpty()) {
+		if (selectedItem != -1)
+		{
+			Contact *pContact = (Contact *)list->GetItemData(selectedItem);
+			if (pContact->ringing)
+			{
+				if (accountSettings.enableFeatureCodeCP && !accountSettings.featureCodeCP.IsEmpty())
+				{
 					tracker->InsertMenu(ID_CALL, 0, ID_CALL_PICKUP, Translate(_T("Call Pickup")));
 					tracker->InsertMenu(ID_CALL, MF_SEPARATOR);
 				}
@@ -309,13 +445,16 @@ LRESULT Contacts::OnContextMenu(WPARAM wParam, LPARAM lParam)
 			CMenu numbersMenu;
 			numbersMenu.CreatePopupMenu();
 			numbersMenu.AppendMenu(MF_STRING, ID_CALL, pContact->number);
-			if (!pContact->phone.IsEmpty() && pContact->phone != pContact->number) {
+			if (!pContact->phone.IsEmpty() && pContact->phone != pContact->number)
+			{
 				numbersMenu.AppendMenu(MF_STRING, ID_CALL_PHONE, pContact->phone);
 			}
-			if (!pContact->mobile.IsEmpty() && pContact->mobile != pContact->number) {
+			if (!pContact->mobile.IsEmpty() && pContact->mobile != pContact->number)
+			{
 				numbersMenu.AppendMenu(MF_STRING, ID_CALL_MOBILE, pContact->mobile);
 			}
-			if (numbersMenu.GetMenuItemCount() > 1) {
+			if (numbersMenu.GetMenuItemCount() > 1)
+			{
 				tracker->ModifyMenu(ID_CALL, MF_BYCOMMAND | MF_POPUP, (UINT_PTR)numbersMenu.m_hMenu, Translate(_T("Call")));
 			}
 			//--
@@ -328,7 +467,8 @@ LRESULT Contacts::OnContextMenu(WPARAM wParam, LPARAM lParam)
 			tracker->EnableMenuItem(ID_EDIT, FALSE);
 			tracker->EnableMenuItem(ID_DELETE, FALSE);
 		}
-		else {
+		else
+		{
 			tracker->EnableMenuItem(ID_CALL, TRUE);
 #ifdef _GLOBAL_VIDEO
 			tracker->EnableMenuItem(ID_VIDEOCALL, TRUE);
@@ -342,14 +482,17 @@ LRESULT Contacts::OnContextMenu(WPARAM wParam, LPARAM lParam)
 		tracker->AppendMenu(MF_STRING, ID_IMPORT, Translate(_T("Import")));
 		tracker->AppendMenu(MF_STRING, ID_EXPORT, Translate(_T("Export")));
 #ifdef _GLOBAL_VIDEO
-		if (accountSettings.disableVideo) {
+		if (accountSettings.disableVideo)
+		{
 			tracker->RemoveMenu(ID_VIDEOCALL, MF_BYCOMMAND);
 		}
 #endif
-		if (accountSettings.disableMessaging) {
+		if (accountSettings.disableMessaging)
+		{
 			tracker->RemoveMenu(ID_CHAT, MF_BYCOMMAND);
 		}
-		if (tracker->GetMenuItemCount() == 3) {
+		if (tracker->GetMenuItemCount() == 3)
+		{
 			tracker->RemoveMenu(0, MF_BYPOSITION);
 		}
 
@@ -361,35 +504,42 @@ LRESULT Contacts::OnContextMenu(WPARAM wParam, LPARAM lParam)
 
 void Contacts::MessageDlgOpen(BOOL isCall, BOOL hasVideo, BYTE index)
 {
-	if (accountSettings.singleMode && mainDlg->messagesDlg->GetCallsCount() && isCall) {
+	if (accountSettings.singleMode && mainDlg->messagesDlg->GetCallsCount() && isCall)
+	{
 		mainDlg->GotoTab(0);
 		return;
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		int i = list->GetNextSelectedItem(pos);
-		Contact* pContact = (Contact*)list->GetItemData(i);
+		Contact *pContact = (Contact *)list->GetItemData(i);
 		CString number = pContact->number;
-		if (index == 1 && !pContact->phone.IsEmpty()) {
+		if (index == 1 && !pContact->phone.IsEmpty())
+		{
 			number = pContact->phone;
 		}
-		if (index == 2 && !pContact->mobile.IsEmpty()) {
+		if (index == 2 && !pContact->mobile.IsEmpty())
+		{
 			number = pContact->mobile;
 		}
-		if (isCall) {
+		if (isCall)
+		{
 			mainDlg->MakeCall(number, hasVideo, false, false, pContact->name);
 		}
-		else {
+		else
+		{
 			mainDlg->MessagesOpen(number, false, false, pContact->name);
 		}
 	}
 }
 
-void Contacts::OnNMDblclkContacts(NMHDR* pNMHDR, LRESULT* pResult)
+void Contacts::OnNMDblclkContacts(NMHDR *pNMHDR, LRESULT *pResult)
 {
 	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
-	if (pNMItemActivate->iItem != -1) {
+	if (pNMItemActivate->iItem != -1)
+	{
 		DefaultItemAction(pNMItemActivate->iItem);
 	}
 	*pResult = 0;
@@ -397,12 +547,14 @@ void Contacts::OnNMDblclkContacts(NMHDR* pNMHDR, LRESULT* pResult)
 
 void Contacts::OnMenuCallPickup()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		int i = list->GetNextSelectedItem(pos);
-		Contact* pContact = (Contact*)list->GetItemData(i);
-		if (pContact->ringing) {
+		Contact *pContact = (Contact *)list->GetItemData(i);
+		if (pContact->ringing)
+		{
 			mainDlg->CommandCallPickup(pContact->number);
 		}
 	}
@@ -432,17 +584,20 @@ void Contacts::OnMenuCallVideo()
 
 void Contacts::OnMenuChat()
 {
-	if (!accountSettings.disableMessaging) {
+	if (!accountSettings.disableMessaging)
+	{
 		MessageDlgOpen();
 	}
 }
 
 void Contacts::OnMenuAdd()
 {
-	if (!addDlg->IsWindowVisible()) {
+	if (!addDlg->IsWindowVisible())
+	{
 		addDlg->ShowWindow(SW_SHOW);
 	}
-	else {
+	else
+	{
 		addDlg->SetForegroundWindow();
 	}
 	Contact contact;
@@ -452,20 +607,21 @@ void Contacts::OnMenuAdd()
 void Contacts::OnMenuEdit()
 {
 	OnMenuAdd();
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
 	int i = list->GetNextSelectedItem(pos);
-	Contact* pContact = (Contact*)list->GetItemData(i);
+	Contact *pContact = (Contact *)list->GetItemData(i);
 	addDlg->Load(pContact);
 }
 
 void Contacts::OnMenuCopy()
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
+	if (pos)
+	{
 		int i = list->GetNextSelectedItem(pos);
-		Contact* pContact = (Contact*)list->GetItemData(i);
+		Contact *pContact = (Contact *)list->GetItemData(i);
 		mainDlg->CopyStringToClipboard(pContact->number);
 	}
 }
@@ -473,26 +629,33 @@ void Contacts::OnMenuCopy()
 void Contacts::OnMenuDelete()
 {
 	CList<CString, CString> contactsSelected;
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = list->GetFirstSelectedItemPosition();
-	if (pos) {
-		if (MessageBox(Translate(_T("Are you sure you want to delete?")), Translate(_T("Delete contact")), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES) {
+	if (pos)
+	{
+		if (MessageBox(Translate(_T("Are you sure you want to delete?")), Translate(_T("Delete contact")), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2) != IDYES)
+		{
 			return;
 		}
-		while (pos) {
-			Contact* pContact = (Contact*)list->GetItemData(list->GetNextSelectedItem(pos));
+		while (pos)
+		{
+			Contact *pContact = (Contact *)list->GetItemData(list->GetNextSelectedItem(pos));
 			contactsSelected.AddTail(pContact->number);
 		}
-		if (isFiltered()) {
+		if (isFiltered())
+		{
 			filterReset();
 		}
 		int count = list->GetItemCount();
 		bool deleted = false;
-		for (int i = 0; i < count; i++) {
-			Contact* pContact = (Contact*)list->GetItemData(i);
-			if (contactsSelected.Find(pContact->number)) {
+		for (int i = 0; i < count; i++)
+		{
+			Contact *pContact = (Contact *)list->GetItemData(i);
+			if (contactsSelected.Find(pContact->number))
+			{
 				bool allow = true;
-				if (allow) {
+				if (allow)
+				{
 					ContactDelete(i);
 					count--;
 					i--;
@@ -500,17 +663,19 @@ void Contacts::OnMenuDelete()
 				}
 			}
 		}
-		if (deleted) {
+		if (deleted)
+		{
 			ContactsSave();
 		}
 	}
 }
 
-bool Contacts::Import(CString filename, CArray<ContactWithFields*>& contactsWithFields, bool directory)
+bool Contacts::Import(CString filename, CArray<ContactWithFields *> &contactsWithFields, bool directory)
 {
 	CCSVFile CSVFile;
 	CSVFile.SetCodePage(CP_UTF8);
-	if (CSVFile.Open(filename, CCSVFile::modeRead | CFile::typeText | CFile::shareDenyWrite)) {
+	if (CSVFile.Open(filename, CCSVFile::modeRead | CFile::typeText | CFile::shareDenyWrite))
+	{
 		CStringArray arr;
 		int nameIndex = -1;
 		int numberIndex = -1;
@@ -530,144 +695,185 @@ bool Contacts::Import(CString filename, CArray<ContactWithFields*>& contactsWith
 		int directoryIndex = -1;
 		int starredIndex = -1;
 		bool header = true;
-		ContactWithFields* contactWithFields;
-		while (CSVFile.ReadData(arr)) {
-			if (header) {
-				for (int i = 0; i < arr.GetCount(); i++) {
+		ContactWithFields *contactWithFields;
+		while (CSVFile.ReadData(arr))
+		{
+			if (header)
+			{
+				for (int i = 0; i < arr.GetCount(); i++)
+				{
 					CString s = arr.GetAt(i);
-					if (nameIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Name")) == 0) {
+					if (nameIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Name")) == 0)
+					{
 						nameIndex = i;
 					}
-					if (numberIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Number")) == 0 || arr.GetAt(i).CompareNoCase(_T("Primary Phone")) == 0 || arr.GetAt(i).CompareNoCase(_T("phone")) == 0)) {
+					if (numberIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Number")) == 0 || arr.GetAt(i).CompareNoCase(_T("Primary Phone")) == 0 || arr.GetAt(i).CompareNoCase(_T("phone")) == 0))
+					{
 						numberIndex = i;
 					}
-					if (firstnameIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("First Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("Given Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("first_name")) == 0)) {
+					if (firstnameIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("First Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("Given Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("first_name")) == 0))
+					{
 						firstnameIndex = i;
 					}
-					if (lastnameIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Last Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("Family Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("last_name")) == 0)) {
+					if (lastnameIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Last Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("Family Name")) == 0 || arr.GetAt(i).CompareNoCase(_T("last_name")) == 0))
+					{
 						lastnameIndex = i;
 					}
-					if (phoneIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Phone Number")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home Phone")) == 0 || arr.GetAt(i).CompareNoCase(_T("Phone 2 - Value")) == 0 || arr.GetAt(i).CompareNoCase(_T("home_number")) == 0)) {
+					if (phoneIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Phone Number")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home Phone")) == 0 || arr.GetAt(i).CompareNoCase(_T("Phone 2 - Value")) == 0 || arr.GetAt(i).CompareNoCase(_T("home_number")) == 0))
+					{
 						phoneIndex = i;
 					}
-					if (mobileIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Mobile Number")) == 0 || arr.GetAt(i).CompareNoCase(_T("Mobile Phone")) == 0 || arr.GetAt(i).CompareNoCase(_T("Phone 1 - Value")) == 0 || arr.GetAt(i).CompareNoCase(_T("mobile_number")) == 0)) {
+					if (mobileIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Mobile Number")) == 0 || arr.GetAt(i).CompareNoCase(_T("Mobile Phone")) == 0 || arr.GetAt(i).CompareNoCase(_T("Phone 1 - Value")) == 0 || arr.GetAt(i).CompareNoCase(_T("mobile_number")) == 0))
+					{
 						mobileIndex = i;
 					}
-					if (emailIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("E-mail Address")) == 0 || arr.GetAt(i).CompareNoCase(_T("E-mail 1 - Value")) == 0 || arr.GetAt(i).CompareNoCase(_T("email")) == 0)) {
+					if (emailIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("E-mail Address")) == 0 || arr.GetAt(i).CompareNoCase(_T("E-mail 1 - Value")) == 0 || arr.GetAt(i).CompareNoCase(_T("email")) == 0))
+					{
 						emailIndex = i;
 					}
-					if (addressIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Address")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home Address")) == 0)) {
+					if (addressIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Address")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home Address")) == 0))
+					{
 						addressIndex = i;
 					}
-					if (cityIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("City")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home City")) == 0)) {
+					if (cityIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("City")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home City")) == 0))
+					{
 						cityIndex = i;
 					}
-					if (stateIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("State")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home State")) == 0)) {
+					if (stateIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("State")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home State")) == 0))
+					{
 						stateIndex = i;
 					}
-					if (zipIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Postal Code")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home Postal Code")) == 0)) {
+					if (zipIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Postal Code")) == 0 || arr.GetAt(i).CompareNoCase(_T("Home Postal Code")) == 0))
+					{
 						zipIndex = i;
 					}
-					if (commentIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Comment")) == 0 || arr.GetAt(i).CompareNoCase(_T("Notes")) == 0)) {
+					if (commentIndex == -1 && (arr.GetAt(i).CompareNoCase(_T("Comment")) == 0 || arr.GetAt(i).CompareNoCase(_T("Notes")) == 0))
+					{
 						commentIndex = i;
 					}
-					if (idIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Id")) == 0) {
+					if (idIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Id")) == 0)
+					{
 						idIndex = i;
 					}
-					if (infoIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Info")) == 0) {
+					if (infoIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Info")) == 0)
+					{
 						infoIndex = i;
 					}
-					if (presenceIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Presence")) == 0) {
+					if (presenceIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Presence")) == 0)
+					{
 						presenceIndex = i;
 					}
-					if (directoryIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Directory")) == 0) {
+					if (directoryIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Directory")) == 0)
+					{
 						directoryIndex = i;
 					}
-					if (starredIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Starred")) == 0) {
+					if (starredIndex == -1 && arr.GetAt(i).CompareNoCase(_T("Starred")) == 0)
+					{
 						starredIndex = i;
 					}
 				}
-				if (numberIndex == -1 && phoneIndex == -1 && mobileIndex == -1) {
+				if (numberIndex == -1 && phoneIndex == -1 && mobileIndex == -1)
+				{
 					AfxMessageBox(Translate(_T("The received data cannot be recognized")));
 					break;
 				}
 				header = false;
 			}
-			else {
+			else
+			{
 				contactWithFields = new ContactWithFields();
 				contactWithFields->contact.directory = directory;
-				if (nameIndex != -1 && arr.GetCount() > nameIndex) {
+				if (nameIndex != -1 && arr.GetCount() > nameIndex)
+				{
 					contactWithFields->fields.AddTail(_T("name"));
 					contactWithFields->contact.name = arr.GetAt(nameIndex);
 				}
-				if (numberIndex != -1 && arr.GetCount() > numberIndex) {
+				if (numberIndex != -1 && arr.GetCount() > numberIndex)
+				{
 					contactWithFields->fields.AddTail(_T("number"));
 					contactWithFields->contact.number = arr.GetAt(numberIndex);
 				}
-				if (firstnameIndex != -1 && arr.GetCount() > firstnameIndex) {
+				if (firstnameIndex != -1 && arr.GetCount() > firstnameIndex)
+				{
 					contactWithFields->fields.AddTail(_T("firstname"));
 					contactWithFields->contact.firstname = arr.GetAt(firstnameIndex);
 				}
-				if (lastnameIndex != -1 && arr.GetCount() > lastnameIndex) {
+				if (lastnameIndex != -1 && arr.GetCount() > lastnameIndex)
+				{
 					contactWithFields->fields.AddTail(_T("lastname"));
 					contactWithFields->contact.lastname = arr.GetAt(lastnameIndex);
 				}
-				if (phoneIndex != -1 && arr.GetCount() > phoneIndex) {
+				if (phoneIndex != -1 && arr.GetCount() > phoneIndex)
+				{
 					contactWithFields->fields.AddTail(_T("phone"));
 					contactWithFields->contact.phone = arr.GetAt(phoneIndex);
 				}
-				if (mobileIndex != -1 && arr.GetCount() > mobileIndex) {
+				if (mobileIndex != -1 && arr.GetCount() > mobileIndex)
+				{
 					contactWithFields->fields.AddTail(_T("mobile"));
 					contactWithFields->contact.mobile = arr.GetAt(mobileIndex);
 				}
-				if (emailIndex != -1 && arr.GetCount() > emailIndex) {
+				if (emailIndex != -1 && arr.GetCount() > emailIndex)
+				{
 					contactWithFields->fields.AddTail(_T("email"));
 					contactWithFields->contact.email = arr.GetAt(emailIndex);
 				}
-				if (addressIndex != -1 && arr.GetCount() > addressIndex) {
+				if (addressIndex != -1 && arr.GetCount() > addressIndex)
+				{
 					contactWithFields->fields.AddTail(_T("address"));
 					contactWithFields->contact.address = arr.GetAt(addressIndex);
 				}
-				if (cityIndex != -1 && arr.GetCount() > cityIndex) {
+				if (cityIndex != -1 && arr.GetCount() > cityIndex)
+				{
 					contactWithFields->fields.AddTail(_T("city"));
 					contactWithFields->contact.city = arr.GetAt(cityIndex);
 				}
-				if (stateIndex != -1 && arr.GetCount() > stateIndex) {
+				if (stateIndex != -1 && arr.GetCount() > stateIndex)
+				{
 					contactWithFields->fields.AddTail(_T("state"));
 					contactWithFields->contact.state = arr.GetAt(stateIndex);
 				}
-				if (zipIndex != -1 && arr.GetCount() > zipIndex) {
+				if (zipIndex != -1 && arr.GetCount() > zipIndex)
+				{
 					contactWithFields->fields.AddTail(_T("zip"));
 					contactWithFields->contact.zip = arr.GetAt(zipIndex);
 				}
-				if (commentIndex != -1 && arr.GetCount() > commentIndex) {
+				if (commentIndex != -1 && arr.GetCount() > commentIndex)
+				{
 					contactWithFields->fields.AddTail(_T("comment"));
 					contactWithFields->contact.comment = arr.GetAt(commentIndex);
 				}
-				if (idIndex != -1 && arr.GetCount() > idIndex) {
+				if (idIndex != -1 && arr.GetCount() > idIndex)
+				{
 					contactWithFields->fields.AddTail(_T("id"));
 					contactWithFields->contact.id = arr.GetAt(idIndex);
 				}
-				if (infoIndex != -1 && arr.GetCount() > infoIndex) {
+				if (infoIndex != -1 && arr.GetCount() > infoIndex)
+				{
 					contactWithFields->fields.AddTail(_T("info"));
 					contactWithFields->contact.info = arr.GetAt(infoIndex);
 				}
-				if (presenceIndex != -1 && arr.GetCount() > presenceIndex) {
+				if (presenceIndex != -1 && arr.GetCount() > presenceIndex)
+				{
 					contactWithFields->fields.AddTail(_T("presence"));
 					contactWithFields->contact.presence = arr.GetAt(presenceIndex) == _T("1");
 				}
-				if (directoryIndex != -1 && arr.GetCount() > directoryIndex) {
+				if (directoryIndex != -1 && arr.GetCount() > directoryIndex)
+				{
 					contactWithFields->fields.AddTail(_T("directory"));
 					contactWithFields->contact.directory = arr.GetAt(directoryIndex) == _T("1");
 				}
-				if (starredIndex != -1 && arr.GetCount() > starredIndex) {
+				if (starredIndex != -1 && arr.GetCount() > starredIndex)
+				{
 					contactWithFields->fields.AddTail(_T("starred"));
 					contactWithFields->contact.starred = arr.GetAt(starredIndex) == _T("1");
 				}
-				if (ContactPrepare(&contactWithFields->contact)) {
+				if (ContactPrepare(&contactWithFields->contact))
+				{
 					contactsWithFields.Add(contactWithFields);
 				}
-				else {
+				else
+				{
 					delete contactWithFields;
 				}
 			}
@@ -681,16 +887,21 @@ bool Contacts::Import(CString filename, CArray<ContactWithFields*>& contactsWith
 void Contacts::OnMenuImport()
 {
 	CFileDialog dlgFile(TRUE, _T("cvs"), 0, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY, _T("CSV Files (*.csv)|*.csv|"), this);
-	if (dlgFile.DoModal() == IDOK) {
-		if (isFiltered()) {
+	if (dlgFile.DoModal() == IDOK)
+	{
+		if (isFiltered())
+		{
 			filterReset();
 		}
-		CArray<ContactWithFields*> contactsWithFields;
-		if (Import(dlgFile.GetPathName(), contactsWithFields)) {
-			if (contactsWithFields.GetCount()) {
+		CArray<ContactWithFields *> contactsWithFields;
+		if (Import(dlgFile.GetPathName(), contactsWithFields))
+		{
+			if (contactsWithFields.GetCount())
+			{
 				ContactsAdd(&contactsWithFields);
-				ContactWithFields* contactWithFields;
-				for (int i = 0; i < contactsWithFields.GetCount(); i++) {
+				ContactWithFields *contactWithFields;
+				for (int i = 0; i < contactsWithFields.GetCount(); i++)
+				{
 					contactWithFields = contactsWithFields.GetAt(i);
 					delete contactWithFields;
 				}
@@ -704,26 +915,33 @@ void Contacts::OnMenuExport()
 {
 	TCHAR szFilters[] = _T("CSV Files (*.csv)|*.csv|XML Files (*.xml)|*.xml||");
 	CFileDialog dlgFile(FALSE, _T("csv"), _T("Contacts"), OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY, szFilters, this);
-	if (dlgFile.DoModal() == IDOK) {
+	if (dlgFile.DoModal() == IDOK)
+	{
 		CString filename = dlgFile.GetPathName();
-		if (dlgFile.m_ofn.nFilterIndex == 2) {
-			if (dlgFile.GetFileExt().IsEmpty()) {
+		if (dlgFile.m_ofn.nFilterIndex == 2)
+		{
+			if (dlgFile.GetFileExt().IsEmpty())
+			{
 				filename.Append(_T(".xml"));
 			}
 			CString source = accountSettings.pathRoaming;
 			source.Append(_T("Contacts.xml"));
 			CopyFile(source, filename, FALSE);
 		}
-		else {
-			if (isFiltered()) {
+		else
+		{
+			if (isFiltered())
+			{
 				filterReset();
 			}
-			if (dlgFile.GetFileExt().IsEmpty()) {
+			if (dlgFile.GetFileExt().IsEmpty())
+			{
 				filename.Append(_T(".csv"));
 			}
 			CCSVFile CSVFile;
 			CSVFile.SetCodePage(CP_UTF8);
-			if (CSVFile.Open(filename, CCSVFile::modeCreate | CCSVFile::modeWrite | CFile::typeText | CFile::shareExclusive)) {
+			if (CSVFile.Open(filename, CCSVFile::modeCreate | CCSVFile::modeWrite | CFile::typeText | CFile::shareExclusive))
+			{
 				CStringArray arr;
 				arr.Add(_T("Name"));
 				arr.Add(_T("Number"));
@@ -743,10 +961,11 @@ void Contacts::OnMenuExport()
 				arr.Add(_T("Directory"));
 				arr.Add(_T("Starred"));
 				CSVFile.WriteData(arr);
-				CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+				CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 				int count = list->GetItemCount();
-				for (int i = 0; i < count; i++) {
-					Contact* contact = (Contact*)list->GetItemData(i);
+				for (int i = 0; i < count; i++)
+				{
+					Contact *contact = (Contact *)list->GetItemData(i);
 					arr.RemoveAll();
 					arr.Add(contact->name);
 					arr.Add(contact->number);
@@ -773,35 +992,42 @@ void Contacts::OnMenuExport()
 	}
 }
 
-bool Contacts::ContactPrepare(Contact* contact)
+bool Contacts::ContactPrepare(Contact *contact)
 {
-	if (contact->number.IsEmpty()) {
+	if (contact->number.IsEmpty())
+	{
 		contact->number = contact->phone;
 	}
-	if (contact->number.IsEmpty()) {
+	if (contact->number.IsEmpty())
+	{
 		contact->number = contact->mobile;
 	}
-	if (contact->number.IsEmpty()) {
+	if (contact->number.IsEmpty())
+	{
 		return false;
 	}
-	if (contact->name.IsEmpty()) {
-		if (contact->firstname != contact->lastname) {
+	if (contact->name.IsEmpty())
+	{
+		if (contact->firstname != contact->lastname)
+		{
 			contact->name.Format(_T("%s %s"), contact->firstname, contact->lastname);
 		}
-		else {
+		else
+		{
 			contact->name = contact->firstname;
 		}
 		contact->name.Trim();
 	}
-	if (contact->name.IsEmpty()) {
+	if (contact->name.IsEmpty())
+	{
 		contact->name = contact->number;
 	}
 	return true;
 }
 
-void Contacts::ContactCreate(CListCtrl* list, Contact* pContact, bool subscribe)
+void Contacts::ContactCreate(CListCtrl *list, Contact *pContact, bool subscribe)
 {
-	Contact* contact = new Contact();
+	Contact *contact = new Contact();
 	contacts.AddTail(contact);
 	contact->image = MSIP_CONTACT_ICON_DEFAULT;
 	contact->name = pContact->name;
@@ -817,7 +1043,8 @@ void Contacts::ContactCreate(CListCtrl* list, Contact* pContact, bool subscribe)
 	contact->zip = pContact->zip;
 	contact->comment = pContact->comment;
 	contact->id = pContact->id;
-	if (!contact->presence || contact->info.IsEmpty()) {
+	if (!contact->presence || contact->info.IsEmpty())
+	{
 		contact->info = pContact->info;
 	}
 	contact->presence = pContact->presence;
@@ -826,139 +1053,178 @@ void Contacts::ContactCreate(CListCtrl* list, Contact* pContact, bool subscribe)
 	ListAppend(list, contact, subscribe);
 }
 
-void Contacts::ListAppend(CListCtrl* list, Contact* contact, bool subscribe)
+void Contacts::ListAppend(CListCtrl *list, Contact *contact, bool subscribe)
 {
 	int i = list->InsertItem(LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE, 0, contact->name, 0, 0, contact->image + (contact->starred ? 7 : 0), (LPARAM)contact);
 	CString number = contact->number;
 	list->SetItemText(i, 1, number);
 	list->SetItemText(i, 2, Translate(contact->info.GetBuffer()));
-	if (subscribe) {
-		if (contact->presence) {
+	if (subscribe)
+	{
+		if (contact->presence)
+		{
 			mainDlg->SubsribeNumber(&contact->number);
 		}
 	}
 }
 
-
-bool Contacts::ContactUpdate(CListCtrl* list, int i, Contact* contact, Contact* newContact, CStringList* fields)
+bool Contacts::ContactUpdate(CListCtrl *list, int i, Contact *contact, Contact *newContact, CStringList *fields)
 {
 	bool changed = false;
-	if (!fields || fields->Find(_T("name"))) {
-		if (contact->name != newContact->name) {
+	if (!fields || fields->Find(_T("name")))
+	{
+		if (contact->name != newContact->name)
+		{
 			list->SetItemText(i, 0, newContact->name);
 			contact->name = newContact->name;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("number"))) {
-		if (contact->number != newContact->number) {
+	if (!fields || fields->Find(_T("number")))
+	{
+		if (contact->number != newContact->number)
+		{
 			bool presenceOrig = contact->presence;
-			if (contact->presence) {
+			if (contact->presence)
+			{
 				contact->presence = false;
 				PresenceUnsubsribeOne(contact);
 			}
 			list->SetItemText(i, 1, newContact->number);
 			contact->number = newContact->number;
-			if ((!fields || fields->Find(_T("presence")))) {
+			if ((!fields || fields->Find(_T("presence"))))
+			{
 				contact->presence = newContact->presence;
 			}
-			else {
+			else
+			{
 				contact->presence = presenceOrig;
 			}
-			if (contact->presence) {
+			if (contact->presence)
+			{
 				mainDlg->SubsribeNumber(&contact->number);
 			}
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("firstname"))) {
-		if (contact->firstname != newContact->firstname) {
+	if (!fields || fields->Find(_T("firstname")))
+	{
+		if (contact->firstname != newContact->firstname)
+		{
 			contact->firstname = newContact->firstname;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("lastname"))) {
-		if (contact->lastname != newContact->lastname) {
+	if (!fields || fields->Find(_T("lastname")))
+	{
+		if (contact->lastname != newContact->lastname)
+		{
 			contact->lastname = newContact->lastname;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("phone"))) {
-		if (contact->phone != newContact->phone) {
+	if (!fields || fields->Find(_T("phone")))
+	{
+		if (contact->phone != newContact->phone)
+		{
 			contact->phone = newContact->phone;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("mobile"))) {
-		if (contact->mobile != newContact->mobile) {
+	if (!fields || fields->Find(_T("mobile")))
+	{
+		if (contact->mobile != newContact->mobile)
+		{
 			contact->mobile = newContact->mobile;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("email"))) {
-		if (contact->email != newContact->email) {
+	if (!fields || fields->Find(_T("email")))
+	{
+		if (contact->email != newContact->email)
+		{
 			contact->email = newContact->email;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("address"))) {
-		if (contact->address != newContact->address) {
+	if (!fields || fields->Find(_T("address")))
+	{
+		if (contact->address != newContact->address)
+		{
 			contact->address = newContact->address;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("city"))) {
-		if (contact->city != newContact->city) {
+	if (!fields || fields->Find(_T("city")))
+	{
+		if (contact->city != newContact->city)
+		{
 			contact->city = newContact->city;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("state"))) {
-		if (contact->state != newContact->state) {
+	if (!fields || fields->Find(_T("state")))
+	{
+		if (contact->state != newContact->state)
+		{
 			contact->state = newContact->state;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("zip"))) {
-		if (contact->zip != newContact->zip) {
+	if (!fields || fields->Find(_T("zip")))
+	{
+		if (contact->zip != newContact->zip)
+		{
 			contact->zip = newContact->zip;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("comment"))) {
-		if (contact->comment != newContact->comment) {
+	if (!fields || fields->Find(_T("comment")))
+	{
+		if (contact->comment != newContact->comment)
+		{
 			contact->comment = newContact->comment;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("id"))) {
-		if (contact->id != newContact->id) {
+	if (!fields || fields->Find(_T("id")))
+	{
+		if (contact->id != newContact->id)
+		{
 			contact->id = newContact->id;
 			changed = true;
 		}
 	}
 
-	if (!fields || fields->Find(_T("info"))) {
-		if ((!contact->presence || contact->info.IsEmpty()) && contact->info != newContact->info) {
+	if (!fields || fields->Find(_T("info")))
+	{
+		if ((!contact->presence || contact->info.IsEmpty()) && contact->info != newContact->info)
+		{
 			list->SetItemText(i, 2, Translate(newContact->info.GetBuffer()));
 			contact->info = newContact->info;
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("starred"))) {
-		if (newContact->starred != contact->starred) {
+	if (!fields || fields->Find(_T("starred")))
+	{
+		if (newContact->starred != contact->starred)
+		{
 			contact->starred = newContact->starred;
 			list->SetItem(i, 0, LVIF_IMAGE, 0, contact->image + (contact->starred ? 7 : 0), 0, 0, 0);
 			changed = true;
 		}
 	}
-	if (!fields || fields->Find(_T("presence"))) {
-		if (newContact->presence != contact->presence) {
+	if (!fields || fields->Find(_T("presence")))
+	{
+		if (newContact->presence != contact->presence)
+		{
 			contact->presence = newContact->presence;
-			if (contact->presence) {
+			if (contact->presence)
+			{
 				mainDlg->SubsribeNumber(&contact->number);
 			}
-			else {
+			else
+			{
 				PresenceUnsubsribeOne(contact);
 			}
 			changed = true;
@@ -967,91 +1233,110 @@ bool Contacts::ContactUpdate(CListCtrl* list, int i, Contact* contact, Contact* 
 	return changed;
 }
 
-void Contacts::ContactsAdd(CArray<ContactWithFields*>* contactsWithFields, bool directory)
+void Contacts::ContactsAdd(CArray<ContactWithFields *> *contactsWithFields, bool directory)
 {
-	if (isFiltered()) {
+	if (isFiltered())
+	{
 		filterReset();
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	bool changedAny = false;
 	int count = list->GetItemCount();
 	int countNew = contactsWithFields->GetCount();
-	for (int i = 0; i < count; i++) {
-		Contact* contact = (Contact*)list->GetItemData(i);
+	for (int i = 0; i < count; i++)
+	{
+		Contact *contact = (Contact *)list->GetItemData(i);
 		bool found = false;
-		for (int j = 0; j < countNew; j++) {
-			ContactWithFields* contactWithFields = contactsWithFields->GetAt(j);
-			if (contact->number == contactWithFields->contact.number 
-				&& contact->name == contactWithFields->contact.name
-				) {
+		for (int j = 0; j < countNew; j++)
+		{
+			ContactWithFields *contactWithFields = contactsWithFields->GetAt(j);
+			if (contact->number == contactWithFields->contact.number && contact->name == contactWithFields->contact.name)
+			{
 				contactWithFields->processed = true;
 				found = true;
-				if (ContactUpdate(list, i, contact, &contactWithFields->contact, &contactWithFields->fields)) {
+				if (ContactUpdate(list, i, contact, &contactWithFields->contact, &contactWithFields->fields))
+				{
 					changedAny = true;
 				}
 			}
 		}
-		if (directory && contact->directory && !found) {
+		if (directory && contact->directory && !found)
+		{
 			ContactDelete(i);
 			changedAny = true;
 			count--;
 			i--;
 		}
 	}
-	for (int j = 0; j < countNew; j++) {
-		ContactWithFields* contactWithFields = contactsWithFields->GetAt(j);
-		if (!contactWithFields->processed) {
+	for (int j = 0; j < countNew; j++)
+	{
+		ContactWithFields *contactWithFields = contactsWithFields->GetAt(j);
+		if (!contactWithFields->processed)
+		{
 			ContactCreate(list, &contactWithFields->contact);
 			changedAny = true;
 		}
 	}
-	if (changedAny) {
+	if (changedAny)
+	{
 		ContactsSave();
 	}
 }
 
-bool Contacts::ContactAdd(Contact contact, BOOL save, BOOL load, CStringList* fields, CString oldNumber, bool manual)
+bool Contacts::ContactAdd(Contact contact, BOOL save, BOOL load, CStringList *fields, CString oldNumber, bool manual)
 {
-	if (!ContactPrepare(&contact)) {
+	if (!ContactPrepare(&contact))
+	{
 		return false;
 	}
-	if (save) {
-		if (isFiltered()) {
+	if (save)
+	{
+		if (isFiltered())
+		{
 			filterReset();
 		}
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
-	if (!load) {
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
+	if (!load)
+	{
 		bool found = false;
 		bool changedAny = false;
 		int count = list->GetItemCount();
-		for (int i = 0; i < count; i++) {
-			Contact* pContact = (Contact*)list->GetItemData(i);
+		for (int i = 0; i < count; i++)
+		{
+			Contact *pContact = (Contact *)list->GetItemData(i);
 			CString compareNumber = !oldNumber.IsEmpty() ? oldNumber : contact.number;
-			if (pContact->number == compareNumber) {
+			if (pContact->number == compareNumber)
+			{
 				found = true;
 				pContact->candidate = false;
 				bool changed = ContactUpdate(list, i, pContact, &contact, fields);
-				if (changed) {
+				if (changed)
+				{
 					changedAny = true;
 				}
 			}
 		}
-		if (found) {
-			if (save && changedAny) {
+		if (found)
+		{
+			if (save && changedAny)
+			{
 				ContactsSave();
 			}
-			if (manual && changedAny) {
+			if (manual && changedAny)
+			{
 				m_SortItemsExListCtrl.SortColumn(m_SortItemsExListCtrl.GetSortColumn(), m_SortItemsExListCtrl.IsAscending());
 			}
 			return true;
 		}
 	}
 	ContactCreate(list, &contact, !load);
-	if (save) {
+	if (save)
+	{
 		ContactsSave();
 	}
-	if (manual) {
+	if (manual)
+	{
 		m_SortItemsExListCtrl.SortColumn(m_SortItemsExListCtrl.GetSortColumn(), m_SortItemsExListCtrl.IsAscending());
 	}
 	return true;
@@ -1059,15 +1344,16 @@ bool Contacts::ContactAdd(Contact contact, BOOL save, BOOL load, CStringList* fi
 
 void Contacts::ContactDelete(int i)
 {
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
-	Contact* contact = (Contact*)list->GetItemData(i);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
+	Contact *contact = (Contact *)list->GetItemData(i);
 	list->DeleteItem(i);
 	ContactDeleteRaw(contact);
 }
 
-void Contacts::ContactDeleteRaw(Contact* contact)
+void Contacts::ContactDeleteRaw(Contact *contact)
 {
-	if (contact->presence) {
+	if (contact->presence)
+	{
 		contact->presence = false;
 		PresenceUnsubsribeOne(contact);
 	}
@@ -1078,17 +1364,19 @@ void Contacts::ContactDeleteRaw(Contact* contact)
 
 void Contacts::ContactsSave()
 {
-	if (isFiltered()) {
+	if (isFiltered())
+	{
 		filterReset();
 	}
 	CMarkup xml;
 	xml.AddElem(_T("contacts"));
 	xml.IntoElem();
 
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	int count = list->GetItemCount();
-	for (int i = 0; i < count; i++) {
-		Contact* pContact = (Contact*)list->GetItemData(i);
+	for (int i = 0; i < count; i++)
+	{
+		Contact *pContact = (Contact *)list->GetItemData(i);
 		xml.AddElem(_T("contact"));
 		xml.AddAttrib(_T("name"), pContact->name);
 		xml.AddAttrib(_T("number"), pContact->number);
@@ -1113,7 +1401,8 @@ void Contacts::ContactsSave()
 	filename.Append(_T("Contacts.xml"));
 	CFile file;
 	CFileException fileException;
-	if (file.Open(filename, CFile::modeCreate | CFile::modeWrite, &fileException)) {
+	if (file.Open(filename, CFile::modeCreate | CFile::modeWrite, &fileException))
+	{
 		CStringA str = "<?xml version=\"1.0\"?>\r\n";
 		str.Append(MSIP::Utf8EncodeUni(xml.GetDoc()));
 		file.Write(str.GetBuffer(), str.GetLength());
@@ -1127,11 +1416,13 @@ void Contacts::ContactsLoad()
 	filename.Append(_T("Contacts.xml"));
 	CFile file;
 	CFileException fileException;
-	if (file.Open(filename, CFile::modeRead, &fileException)) {
+	if (file.Open(filename, CFile::modeRead, &fileException))
+	{
 		CStringA data;
 		int i;
 		UINT len = 0;
-		do {
+		do
+		{
 			LPSTR p = data.GetBuffer(len + 1024);
 			i = file.Read(p + len, 1024);
 			len += i;
@@ -1140,9 +1431,12 @@ void Contacts::ContactsLoad()
 		file.Close();
 		CMarkup xml;
 		BOOL bResult = xml.SetDoc(MSIP::Utf8DecodeUni(data));
-		if (bResult) {
-			if (xml.FindElem(_T("contacts"))) {
-				while (xml.FindChildElem(_T("contact"))) {
+		if (bResult)
+		{
+			if (xml.FindElem(_T("contacts")))
+			{
+				while (xml.FindChildElem(_T("contact")))
+				{
 					xml.IntoElem();
 					Contact contact;
 					contact.name = xml.GetAttrib(_T("name"));
@@ -1166,8 +1460,10 @@ void Contacts::ContactsLoad()
 					contact.starred = rab == _T("1");
 					rab = xml.GetAttrib(_T("directory"));
 					contact.directory = rab == _T("1");
-					if (!contact.number.IsEmpty()) {
-						if (!isFiltered(&contact)) {
+					if (!contact.number.IsEmpty())
+					{
+						if (!isFiltered(&contact))
+						{
 							ContactAdd(contact, FALSE, TRUE);
 						}
 					}
@@ -1176,20 +1472,24 @@ void Contacts::ContactsLoad()
 			}
 		}
 	}
-	else {
+	else
+	{
 		// old
 		CString key;
 		CString val;
 		LPTSTR ptr = val.GetBuffer(255);
 		int i = 0;
-		while (TRUE) {
+		while (TRUE)
+		{
 			key.Format(_T("%d"), i);
-			if (GetPrivateProfileString(_T("Contacts"), key, NULL, ptr, 256, accountSettings.iniFile)) {
+			if (GetPrivateProfileString(_T("Contacts"), key, NULL, ptr, 256, accountSettings.iniFile))
+			{
 				Contact contact;
 				ContactDecode(ptr, contact);
 				ContactAdd(contact, FALSE, TRUE);
 			}
-			else {
+			else
+			{
 				break;
 			}
 			i++;
@@ -1200,65 +1500,79 @@ void Contacts::ContactsLoad()
 	m_SortItemsExListCtrl.SortColumn(m_SortItemsExListCtrl.GetSortColumn(), m_SortItemsExListCtrl.IsAscending());
 }
 
-void Contacts::ContactDecode(CString str, Contact& contact)
+void Contacts::ContactDecode(CString str, Contact &contact)
 {
 	CString rab;
 	int begin;
 	int end;
 	begin = 0;
 	end = str.Find(';', begin);
-	if (end != -1) {
+	if (end != -1)
+	{
 		contact.number = str.Mid(begin, end - begin);
 		begin = end + 1;
 		end = str.Find(';', begin);
-		if (end != -1) {
+		if (end != -1)
+		{
 			contact.name = str.Mid(begin, end - begin);
 			begin = end + 1;
 			end = str.Find(';', begin);
-			if (end != -1) {
+			if (end != -1)
+			{
 				rab = str.Mid(begin, end - begin);
 				contact.presence = rab == _T("1");
 				begin = end + 1;
 				end = str.Find(';', begin);
-				if (end != -1) {
+				if (end != -1)
+				{
 					rab = str.Mid(begin, end - begin);
 				}
-				else {
+				else
+				{
 					rab = str.Mid(begin);
 				}
 				contact.directory = rab == _T("1");
 			}
-			else {
+			else
+			{
 				rab = str.Mid(begin);
 				contact.presence = rab == _T("1");
 			}
 		}
-		else {
+		else
+		{
 			contact.name = str.Mid(begin);
 		}
 	}
-	else {
+	else
+	{
 		contact.number = str;
 		contact.name = contact.number;
 	}
 }
 
-Contact* Contacts::FindContact(CString number, bool subscribed)
+Contact *Contacts::FindContact(CString number, bool subscribed)
 {
 	POSITION pos = contacts.GetHeadPosition();
-	while (pos) {
-		Contact* contact = contacts.GetNext(pos);
-		if (subscribed) {
-			if (contact->presence) {
+	while (pos)
+	{
+		Contact *contact = contacts.GetNext(pos);
+		if (subscribed)
+		{
+			if (contact->presence)
+			{
 				CString commands;
 				CString numberFormated = FormatNumber(contact->number, &commands, true);
-				if (number == numberFormated) {
+				if (number == numberFormated)
+				{
 					return contact;
 				}
 			}
 		}
-		else {
-			if (number == contact->number) {
+		else
+		{
+			if (number == contact->number)
+			{
 				return contact;
 			}
 		}
@@ -1271,20 +1585,24 @@ CString Contacts::GetNameByNumber(CString number)
 	CString name;
 	CString nameAlt;
 	POSITION pos = contacts.GetHeadPosition();
-	while (pos) {
-		Contact* contact = contacts.GetNext(pos);
+	while (pos)
+	{
+		Contact *contact = contacts.GetNext(pos);
 		CString commands;
 		CString numberContact = FormatNumber(contact->number, &commands);
 		SIPURI sipuri;
 		MSIP::ParseSIPURI(numberContact, &sipuri);
 		numberContact = !sipuri.user.IsEmpty() ? sipuri.user : sipuri.domain;
-		if (number == numberContact) {
+		if (number == numberContact)
+		{
 			name = contact->name;
 			break;
 		}
-		if (numberContact.GetLength() > 3) {
+		if (numberContact.GetLength() > 3)
+		{
 			int pos = number.Find(numberContact);
-			if (pos >= 0 && pos <= 3 && number.GetLength() == numberContact.GetLength() + pos) {
+			if (pos >= 0 && pos <= 3 && number.GetLength() == numberContact.GetLength() + pos)
+			{
 				nameAlt = contact->name;
 			}
 		}
@@ -1292,7 +1610,7 @@ CString Contacts::GetNameByNumber(CString number)
 	return !name.IsEmpty() ? name : nameAlt;
 }
 
-void Contacts::PresenceUnsubsribeOne(Contact* pContact)
+void Contacts::PresenceUnsubsribeOne(Contact *pContact)
 {
 	mainDlg->UnsubscribeNumber(&pContact->number);
 	PresenceReset(pContact);
@@ -1301,28 +1619,35 @@ void Contacts::PresenceUnsubsribeOne(Contact* pContact)
 void Contacts::PresenceSubscribe()
 {
 	POSITION pos = contacts.GetHeadPosition();
-	while (pos) {
-		Contact* contact = contacts.GetNext(pos);
-		if (contact->presence) {
+	while (pos)
+	{
+		Contact *contact = contacts.GetNext(pos);
+		if (contact->presence)
+		{
 			mainDlg->SubsribeNumber(&contact->number);
 		}
 	}
 }
 
-void Contacts::PresenceReset(Contact* pContact)
+void Contacts::PresenceReset(Contact *pContact)
 {
-	if (!::IsWindow(this->m_hWnd)) {
+	if (!::IsWindow(this->m_hWnd))
+	{
 		return;
 	}
-	if (isFiltered()) {
+	if (isFiltered())
+	{
 		filterReset();
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	int n = list->GetItemCount();
-	for (int i = 0; i < n; i++) {
-		Contact* contact = (Contact*)list->GetItemData(i);
-		if (!pContact || pContact == contact) {
-			if (contact->image != MSIP_CONTACT_ICON_DEFAULT) {
+	for (int i = 0; i < n; i++)
+	{
+		Contact *contact = (Contact *)list->GetItemData(i);
+		if (!pContact || pContact == contact)
+		{
+			if (contact->image != MSIP_CONTACT_ICON_DEFAULT)
+			{
 				contact->info.Empty();
 				list->SetItemText(i, 2, _T(""));
 			}
@@ -1333,24 +1658,30 @@ void Contacts::PresenceReset(Contact* pContact)
 	}
 }
 
-void Contacts::PresenceReceived(CString* buddyNumber, int image, bool ringing, CString* info, bool fromUsersDirectory)
+void Contacts::PresenceReceived(CString *buddyNumber, int image, bool ringing, CString *info, bool fromUsersDirectory)
 {
 	bool blink = false;
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	POSITION pos = contacts.GetHeadPosition();
-	while (pos) {
-		Contact* contact = contacts.GetNext(pos);
-		if (contact->presence || fromUsersDirectory) {
+	while (pos)
+	{
+		Contact *contact = contacts.GetNext(pos);
+		if (contact->presence || fromUsersDirectory)
+		{
 			CString numberFormated;
-			if (fromUsersDirectory) {
+			if (fromUsersDirectory)
+			{
 				numberFormated = contact->number;
 			}
-			else {
+			else
+			{
 				CString commands;
 				numberFormated = FormatNumber(contact->number, &commands, true);
 			}
-			if (*buddyNumber == numberFormated) {
-				if (ringing) {
+			if (*buddyNumber == numberFormated)
+			{
+				if (ringing)
+				{
 					blink = true;
 				}
 				contact->image = image;
@@ -1360,15 +1691,18 @@ void Contacts::PresenceReceived(CString* buddyNumber, int image, bool ringing, C
 				int i;
 				findInfo.flags = LVFI_PARAM;
 				findInfo.lParam = (LPARAM)contact;
-				if ((i = list->FindItem(&findInfo)) != -1) {
+				if ((i = list->FindItem(&findInfo)) != -1)
+				{
 					list->SetItem(i, 0, LVIF_IMAGE, 0, contact->image + (contact->starred ? 7 : 0), 0, 0, 0);
 					list->SetItemText(i, 2, Translate(contact->info.GetBuffer()));
 				}
 			}
 		}
 	};
-	if (blink) {
-		if (!blinkTimer) {
+	if (blink)
+	{
+		if (!blinkTimer)
+		{
 			blinkTimer = SetTimer(IDT_TIMER_CONTACTS_BLINK, 500, NULL);
 			OnTimerContactsBlink();
 		}
@@ -1377,57 +1711,66 @@ void Contacts::PresenceReceived(CString* buddyNumber, int image, bool ringing, C
 
 void Contacts::OnTimerContactsBlink()
 {
-	if (!blinkTimer) {
+	if (!blinkTimer)
+	{
 		return;
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	int n = list->GetItemCount();
 	bool ringing = false;
-	for (int i = 0; i < n; i++) {
-		Contact* contact = (Contact*)list->GetItemData(i);
-		if (contact->ringing) {
+	for (int i = 0; i < n; i++)
+	{
+		Contact *contact = (Contact *)list->GetItemData(i);
+		if (contact->ringing)
+		{
 			list->SetItem(i, 0, LVIF_IMAGE, 0, blinkState ? contact->image + (contact->starred ? 7 : 0) : MSIP_CONTACT_ICON_BLANK, 0, 0, 0);
 			ringing = true;
 		}
 	}
-	if (!ringing) {
+	if (!ringing)
+	{
 		blinkTimer = NULL;
 		KillTimer(IDT_TIMER_CONTACTS_BLINK);
 		blinkState = false;
 	}
-	else {
+	else
+	{
 		blinkState = !blinkState;
 	}
 }
 
 void Contacts::SetCanditates()
 {
-	if (isFiltered()) {
+	if (isFiltered())
+	{
 		filterReset();
 	}
 	GetDlgItem(IDC_FILER_VALUE)->EnableWindow(FALSE);
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	int count = list->GetItemCount();
 	for (int i = 0; i < count; i++)
 	{
-		Contact* pContact = (Contact*)list->GetItemData(i);
-		if (pContact->directory) {
+		Contact *pContact = (Contact *)list->GetItemData(i);
+		if (pContact->directory)
+		{
 			pContact->candidate = true;
 		}
 	}
 }
 int Contacts::DeleteCanditates()
 {
-	if (isFiltered()) {
+	if (isFiltered())
+	{
 		filterReset();
 	}
-	CListCtrl* list = (CListCtrl*)GetDlgItem(IDC_CONTACTS);
+	CListCtrl *list = (CListCtrl *)GetDlgItem(IDC_CONTACTS);
 	int count = list->GetItemCount();
 	int deleted = 0;
 	for (int i = 0; i < count; i++)
 	{
-		Contact* pContact = (Contact*)list->GetItemData(i);
-		if (pContact->candidate) {
+		Contact *pContact = (Contact *)list->GetItemData(i);
+		if (pContact->candidate)
+		{
 			ContactDelete(i);
 			count--;
 			i--;
@@ -1437,4 +1780,3 @@ int Contacts::DeleteCanditates()
 	GetDlgItem(IDC_FILER_VALUE)->EnableWindow(TRUE);
 	return deleted;
 }
-
