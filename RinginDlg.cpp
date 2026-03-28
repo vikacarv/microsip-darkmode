@@ -74,18 +74,36 @@ BOOL RinginDlg::OnInitDialog()
 {
 	CBaseDialog::OnInitDialog();
 
-	// ── FASE 14: Dark Mode ───────────────────────────────────────────────────
-
+	// ── Dark Mode ────────────────────────────────────────────────────────────
 	// Barra de título escura
 	BOOL darkTitle = TRUE;
 	DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
 
-	// Fundo da janela (reforço — CBaseDialog pode não cobrir esta janela)
-	SetClassLongPtr(m_hWnd, GCLP_HBRBACKGROUND,
-					(LONG_PTR)::CreateSolidBrush(RGB(28, 28, 28)));
-
-	// ─────────────────────────────────────────────────────────────────────────
-
+	// Aplicar BS_OWNERDRAW em todos os push buttons
+	{
+		CWnd *pChild = GetWindow(GW_CHILD);
+		while (pChild)
+		{
+			TCHAR szClass[64] = {0};
+			::GetClassName(pChild->GetSafeHwnd(), szClass, 63);
+			if (_tcsicmp(szClass, _T("Button")) == 0)
+			{
+				LONG style = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+				LONG tipo = style & BS_TYPEMASK;
+				if (tipo == BS_PUSHBUTTON || tipo == BS_DEFPUSHBUTTON)
+				{
+					LONG lStyle = style;
+					lStyle &= ~(BS_PUSHBUTTON | BS_DEFPUSHBUTTON);
+					lStyle |= BS_OWNERDRAW;
+					::SetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE, lStyle);
+					SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+				}
+			}
+			pChild = pChild->GetNextWindow();
+		}
+		RedrawWindow(NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+	}
+	// ── Fim Dark Mode ─────────────────────────────────────────────────────────
 	AutoMove(IDC_ANSWER, 0, 100, 0, 0);
 	AutoMove(IDC_DECLINE, 0, 100, 0, 0);
 	AutoMove(IDC_IGNORE, 0, 100, 0, 0);
@@ -243,15 +261,13 @@ ON_WM_CLOSE()
 ON_WM_TIMER()
 ON_WM_MOVE()
 ON_WM_SHOWWINDOW()
+ON_WM_DRAWITEM()
 ON_BN_CLICKED(IDOK, &RinginDlg::OnBnClickedOk)
 ON_BN_CLICKED(IDCANCEL, &RinginDlg::OnBnClickedCancel)
 ON_BN_CLICKED(IDC_ANSWER, &RinginDlg::OnBnClickedAudio)
 ON_BN_CLICKED(IDC_DECLINE, &RinginDlg::OnBnClickedDecline)
 ON_BN_CLICKED(IDC_VIDEO, &RinginDlg::OnBnClickedVideo)
 ON_BN_CLICKED(IDC_TRANSFER, OnBnClickedTransfer)
-// ── FASE 14: Dark Mode ───────────────────────────
-ON_WM_ERASEBKGND()
-// ─────────────────────────────────────────────────
 END_MESSAGE_MAP()
 
 void RinginDlg::OnClose()
@@ -385,6 +401,104 @@ BOOL RinginDlg::OnEraseBkgnd(CDC *pDC)
 	GetClientRect(&rect);
 	pDC->FillSolidRect(&rect, RGB(28, 28, 28));
 	return TRUE;
+}
+
+void RinginDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
+{
+	if (lpDIS->CtlType != ODT_BUTTON)
+	{
+		CBaseDialog::OnDrawItem(nIDCtl, lpDIS);
+		return;
+	}
+
+	HDC hdc = lpDIS->hDC;
+	RECT rc = lpDIS->rcItem;
+	UINT state = lpDIS->itemState;
+
+	bool pressed = (state & ODS_SELECTED) != 0;
+	bool focused = (state & ODS_FOCUS) != 0;
+	bool disabled = (state & ODS_DISABLED) != 0;
+
+	// Botão "Atender" (IDC_ANSWER) recebe cor verde cyberpunk quando pressionado
+	// Botão "Recusar" (IDC_DECLINE) recebe cor rosa cyberpunk quando pressionado
+	// Demais botões seguem o padrão da Fase 14
+	COLORREF clrBg, clrBord, clrText;
+
+	if (nIDCtl == IDC_ANSWER)
+	{
+		clrBg = pressed ? RGB(0, 120, 60) : disabled ? RGB(28, 28, 28)
+													 : RGB(36, 36, 36);
+		clrBord = focused ? RGB(180, 20, 90) : pressed ? RGB(0, 200, 80)
+													   : RGB(80, 80, 80);
+		clrText = pressed ? RGB(180, 255, 180) : disabled ? RGB(80, 80, 80)
+														  : RGB(210, 210, 210);
+	}
+	else if (nIDCtl == IDC_DECLINE)
+	{
+		clrBg = pressed ? RGB(120, 0, 60) : disabled ? RGB(28, 28, 28)
+													 : RGB(36, 36, 36);
+		clrBord = focused ? RGB(180, 20, 90) : pressed ? RGB(180, 20, 90)
+													   : RGB(80, 80, 80);
+		clrText = pressed ? RGB(255, 20, 147) : disabled ? RGB(80, 80, 80)
+														 : RGB(210, 210, 210);
+	}
+	else
+	{
+		clrBg = pressed ? RGB(120, 0, 60) : disabled ? RGB(28, 28, 28)
+													 : RGB(36, 36, 36);
+		clrBord = focused ? RGB(180, 20, 90) : pressed ? RGB(180, 20, 90)
+													   : RGB(80, 80, 80);
+		clrText = pressed ? RGB(255, 20, 147) : disabled ? RGB(80, 80, 80)
+														 : RGB(210, 210, 210);
+	}
+
+	// Fundo
+	HBRUSH hBrush = ::CreateSolidBrush(clrBg);
+	::FillRect(hdc, &rc, hBrush);
+	::DeleteObject(hBrush);
+
+	// Borda
+	HPEN hPen = ::CreatePen(PS_SOLID, 1, clrBord);
+	HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+	HBRUSH hOldBrush = (HBRUSH)::SelectObject(hdc, ::GetStockObject(HOLLOW_BRUSH));
+	::Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+	::SelectObject(hdc, hOldPen);
+	::SelectObject(hdc, hOldBrush);
+	::DeleteObject(hPen);
+
+	// Ícone (se houver — ex: IDC_TRANSFER com ícone de telefone)
+	HICON hIcon = (HICON)::SendMessage(lpDIS->hwndItem, BM_GETIMAGE, IMAGE_ICON, 0);
+	if (hIcon)
+	{
+		ICONINFO ii = {0};
+		::GetIconInfo(hIcon, &ii);
+		BITMAP bm = {0};
+		::GetObject(ii.hbmColor ? ii.hbmColor : ii.hbmMask, sizeof(bm), &bm);
+		int iconW = bm.bmWidth;
+		int iconH = bm.bmHeight;
+		if (ii.hbmColor)
+			::DeleteObject(ii.hbmColor);
+		if (ii.hbmMask)
+			::DeleteObject(ii.hbmMask);
+
+		int x = rc.left + (rc.right - rc.left - iconW) / 2;
+		int y = rc.top + (rc.bottom - rc.top - iconH) / 2;
+		::DrawIconEx(hdc, x, y, hIcon, iconW, iconH, 0, NULL, DI_NORMAL);
+		return; // não desenha texto se tem ícone
+	}
+
+	// Texto
+	TCHAR szText[128] = {0};
+	::GetWindowText(lpDIS->hwndItem, szText, 127);
+	if (szText[0])
+	{
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, clrText);
+		HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::DrawText(hdc, szText, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		::SelectObject(hdc, hOldFont);
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

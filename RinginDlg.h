@@ -60,6 +60,8 @@ public:
 	afx_msg void OnBnClickedDecline();
 	afx_msg void OnMove(int x, int y);
 	afx_msg void OnBnClickedTransfer();
+	// Adicionar após a declaração OnBnClickedTransfer():
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS);
 	// ── FASE 14: Dark Mode ───────────────────────────
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	// ─────────────────────────────────────────────────
