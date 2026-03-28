@@ -22,14 +22,17 @@
 #include "mainDlg.h"
 #include "settings.h"
 #include "Markup.h"
-
+// ── FASE 14: Dark Mode ───────────────────────────────
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
+// ─────────────────────────────────────────────────────
 #include <vector>
 #include <algorithm>
 
-RinginDlg::RinginDlg(CWnd* pParent /*=NULL*/)
+RinginDlg::RinginDlg(CWnd *pParent /*=NULL*/)
 	: CBaseDialog(RinginDlg::IDD, pParent)
 {
-	Create (IDD, pParent);
+	Create(IDD, pParent);
 	answered = false;
 }
 
@@ -39,136 +42,178 @@ RinginDlg::~RinginDlg(void)
 
 int RinginDlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	if (langPack.rtl) {
-		ModifyStyleEx(0,WS_EX_LAYOUTRTL);
+	if (langPack.rtl)
+	{
+		ModifyStyleEx(0, WS_EX_LAYOUTRTL);
 	}
 	return 0;
 }
 
 BOOL CALLBACK MyInfoEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
 {
-    MONITORINFOEX iMonitor;
-    iMonitor.cbSize = sizeof(MONITORINFOEX);
-    GetMonitorInfo(hMonitor, &iMonitor);
-    if (iMonitor.dwFlags == DISPLAY_DEVICE_MIRRORING_DRIVER) {
-        return true;
-    } else {
-        reinterpret_cast< std::vector<HMONITOR>* >(dwData)->push_back(hMonitor);
-        return true;
-    }
+	MONITORINFOEX iMonitor;
+	iMonitor.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(hMonitor, &iMonitor);
+	if (iMonitor.dwFlags == DISPLAY_DEVICE_MIRRORING_DRIVER)
+	{
+		return true;
+	}
+	else
+	{
+		reinterpret_cast<std::vector<HMONITOR> *>(dwData)->push_back(hMonitor);
+		return true;
+	}
 }
 
-void RinginDlg::DoDataExchange(CDataExchange* pDX)
+void RinginDlg::DoDataExchange(CDataExchange *pDX)
 {
 	CBaseDialog::DoDataExchange(pDX);
 }
 
-BOOL RinginDlg::OnInitDialog() {
+BOOL RinginDlg::OnInitDialog()
+{
 	CBaseDialog::OnInitDialog();
+
+	// ── FASE 14: Dark Mode ───────────────────────────────────────────────────
+
+	// Barra de título escura
+	BOOL darkTitle = TRUE;
+	DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
+
+	// Fundo da janela (reforço — CBaseDialog pode não cobrir esta janela)
+	SetClassLongPtr(m_hWnd, GCLP_HBRBACKGROUND,
+					(LONG_PTR)::CreateSolidBrush(RGB(28, 28, 28)));
+
+	// ─────────────────────────────────────────────────────────────────────────
 
 	AutoMove(IDC_ANSWER, 0, 100, 0, 0);
 	AutoMove(IDC_DECLINE, 0, 100, 0, 0);
 	AutoMove(IDC_IGNORE, 0, 100, 0, 0);
 
 #ifdef _GLOBAL_VIDEO
-	if (accountSettings.disableVideo) {
+	if (accountSettings.disableVideo)
+	{
 		GetDlgItem(IDC_VIDEO)->ShowWindow(SW_HIDE);
 	}
 #endif
-	
+
 	TranslateDialog(this->m_hWnd);
 
-	CFont* font = this->GetFont();
+	CFont *font = this->GetFont();
 	LOGFONT lf;
 	font->GetLogFont(&lf);
 
-    lf.lfHeight = -MulDiv(10, dpiY, 96);
+	lf.lfHeight = -MulDiv(10, dpiY, 96);
 	m_font_ignore.CreateFontIndirect(&lf);
 	GetDlgItem(IDC_IGNORE)->SetFont(&m_font_ignore);
 	GetDlgItem(IDC_IGNORE)->EnableWindow(FALSE);
-	if (accountSettings.noIgnoreCall) {
+	if (accountSettings.noIgnoreCall)
+	{
 		GetDlgItem(IDC_IGNORE)->ShowWindow(SW_HIDE);
 	}
-    lf.lfHeight = -MulDiv(20, dpiY, 96);
+	lf.lfHeight = -MulDiv(20, dpiY, 96);
 	lf.lfWeight = FW_BOLD;
 	m_font.CreateFontIndirect(&lf);
 	GetDlgItem(IDC_CALLER_NAME)->SetFont(&m_font);
 
-	GetDlgItem(IDC_CALLER_NAME)->ModifyStyleEx(WS_EX_CLIENTEDGE,0,SWP_NOSIZE|SWP_FRAMECHANGED);
-	GetDlgItem(IDC_CALLER_ADDR)->ModifyStyleEx(WS_EX_CLIENTEDGE,0,SWP_NOSIZE|SWP_FRAMECHANGED);
+	GetDlgItem(IDC_CALLER_NAME)->ModifyStyleEx(WS_EX_CLIENTEDGE, 0, SWP_NOSIZE | SWP_FRAMECHANGED);
+	GetDlgItem(IDC_CALLER_ADDR)->ModifyStyleEx(WS_EX_CLIENTEDGE, 0, SWP_NOSIZE | SWP_FRAMECHANGED);
 
 	m_hIconTransfer = LoadImageIcon(IDI_FORWARD, 16, 16);
-	((CButton*)GetDlgItem(IDC_TRANSFER))->SetIcon(m_hIconTransfer);
-	int x,y;
-	if (accountSettings.randomAnswerBox) {
+	((CButton *)GetDlgItem(IDC_TRANSFER))->SetIcon(m_hIconTransfer);
+	int x, y;
+	if (accountSettings.randomAnswerBox)
+	{
 		CRect ringinRect;
 		GetWindowRect(&ringinRect);
-		if (accountSettings.multiMonitor) {		
+		if (accountSettings.multiMonitor)
+		{
 			std::vector<HMONITOR> hMonitorArray;
 			EnumDisplayMonitors(NULL, NULL, &MyInfoEnumProc, reinterpret_cast<LPARAM>(&hMonitorArray));
-			std::random_shuffle ( hMonitorArray.begin(), hMonitorArray.end() );
+			std::random_shuffle(hMonitorArray.begin(), hMonitorArray.end());
 			std::vector<HMONITOR>::iterator it = hMonitorArray.begin();
 			HMONITOR hMonitor = *it;
 			MONITORINFO mi;
 			mi.cbSize = sizeof(MONITORINFO);
-			GetMonitorInfo(hMonitor,&mi);
-			x = mi.rcWork.left + ( (mi.rcWork.right-mi.rcWork.left) -ringinRect.Width()) * rand() / RAND_MAX;
-			y = mi.rcWork.top + ( (mi.rcWork.bottom-mi.rcWork.top) -ringinRect.Height()) * rand() / RAND_MAX;
-		} else {
-			CRect primaryScreenRect;
-			SystemParametersInfo(SPI_GETWORKAREA,0,&primaryScreenRect,0);
-			x = primaryScreenRect.left + ( (primaryScreenRect.right-primaryScreenRect.left) -ringinRect.Width()) * rand() / RAND_MAX;
-			y = primaryScreenRect.top + ( (primaryScreenRect.bottom-primaryScreenRect.top) -ringinRect.Height()) * rand() / RAND_MAX;
+			GetMonitorInfo(hMonitor, &mi);
+			x = mi.rcWork.left + ((mi.rcWork.right - mi.rcWork.left) - ringinRect.Width()) * rand() / RAND_MAX;
+			y = mi.rcWork.top + ((mi.rcWork.bottom - mi.rcWork.top) - ringinRect.Height()) * rand() / RAND_MAX;
 		}
-	} else {
+		else
+		{
+			CRect primaryScreenRect;
+			SystemParametersInfo(SPI_GETWORKAREA, 0, &primaryScreenRect, 0);
+			x = primaryScreenRect.left + ((primaryScreenRect.right - primaryScreenRect.left) - ringinRect.Width()) * rand() / RAND_MAX;
+			y = primaryScreenRect.top + ((primaryScreenRect.bottom - primaryScreenRect.top) - ringinRect.Height()) * rand() / RAND_MAX;
+		}
+	}
+	else
+	{
 		if (mainDlg->ringinDlgs.GetCount())
 		{
 			CRect rect;
-			mainDlg->ringinDlgs.GetAt(mainDlg->ringinDlgs.GetCount()-1)->GetWindowRect(&rect);
-			x=rect.left+22;
-			y=rect.top+22;
-		} else {
-			if (accountSettings.ringinX || accountSettings.ringinY) {
+			mainDlg->ringinDlgs.GetAt(mainDlg->ringinDlgs.GetCount() - 1)->GetWindowRect(&rect);
+			x = rect.left + 22;
+			y = rect.top + 22;
+		}
+		else
+		{
+			if (accountSettings.ringinX || accountSettings.ringinY)
+			{
 				CRect screenRect;
 				MSIP::GetScreenRect(&screenRect);
-				if (accountSettings.multiMonitor) {
+				if (accountSettings.multiMonitor)
+				{
 					MSIP::GetScreenRect(&screenRect);
 				}
-				else {
+				else
+				{
 					SystemParametersInfo(SPI_GETWORKAREA, 0, &screenRect, 0);
 				}
 				CRect rect;
 				GetWindowRect(&rect);
-				int maxLeft = screenRect.right-rect.Width();
-				if (accountSettings.ringinX>maxLeft) {
+				int maxLeft = screenRect.right - rect.Width();
+				if (accountSettings.ringinX > maxLeft)
+				{
 					x = maxLeft;
-				} else {
+				}
+				else
+				{
 					x = accountSettings.ringinX < screenRect.left ? screenRect.left : accountSettings.ringinX;
 				}
-				int maxTop = screenRect.bottom-rect.Height();
-				if (accountSettings.ringinY>maxTop) {
+				int maxTop = screenRect.bottom - rect.Height();
+				if (accountSettings.ringinY > maxTop)
+				{
 					y = maxTop;
-				} else {
+				}
+				else
+				{
 					y = accountSettings.ringinY < screenRect.top ? screenRect.top : accountSettings.ringinY;
 				}
-			} else {
+			}
+			else
+			{
 				CRect ringinRect;
 				GetWindowRect(&ringinRect);
 				CRect primaryScreenRect;
-				SystemParametersInfo(SPI_GETWORKAREA,0,&primaryScreenRect,0);
-				x = (primaryScreenRect.Width()-ringinRect.Width())/2;
-				y = (primaryScreenRect.Height()-ringinRect.Height())/2;
+				SystemParametersInfo(SPI_GETWORKAREA, 0, &primaryScreenRect, 0);
+				x = (primaryScreenRect.Width() - ringinRect.Width()) / 2;
+				y = (primaryScreenRect.Height() - ringinRect.Height()) / 2;
 			}
 		}
 	}
 	SetWindowPos(accountSettings.bringToFrontOnIncoming || accountSettings.alwaysOnTop ? &this->wndTopMost : &this->wndNoTopMost, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
-	if (accountSettings.bringToFrontOnIncoming) {
+	if (accountSettings.bringToFrontOnIncoming)
+	{
 
-		if (mainDlg->IsWindowVisible()) {
-			if (mainDlg->IsIconic()) {
+		if (mainDlg->IsWindowVisible())
+		{
+			if (mainDlg->IsIconic())
+			{
 				mainDlg->ShowWindow(SW_RESTORE);
 			}
-			else {
+			else
+			{
 				mainDlg->ShowWindow(SW_HIDE);
 				mainDlg->ShowWindow(SW_MINIMIZE);
 				mainDlg->ShowWindow(SW_RESTORE);
@@ -176,10 +221,11 @@ BOOL RinginDlg::OnInitDialog() {
 		}
 		ShowWindow(SW_SHOWNORMAL);
 		SetForegroundWindow();
-
 	}
-	else {
-		if (mainDlg->IsWindowVisible()) {
+	else
+	{
+		if (mainDlg->IsWindowVisible())
+		{
 			ShowWindow(SW_SHOWNORMAL);
 		}
 	}
@@ -189,30 +235,33 @@ BOOL RinginDlg::OnInitDialog() {
 void RinginDlg::SetCallId(pjsua_call_id new_call_id)
 {
 	call_id = new_call_id;
-
 }
 
-
 BEGIN_MESSAGE_MAP(RinginDlg, CBaseDialog)
-	ON_WM_CREATE()
-	ON_WM_CLOSE()
-	ON_WM_TIMER()
-	ON_WM_MOVE()
-	ON_WM_SHOWWINDOW()
-	ON_BN_CLICKED(IDOK, &RinginDlg::OnBnClickedOk)
-	ON_BN_CLICKED(IDCANCEL, &RinginDlg::OnBnClickedCancel)
-	ON_BN_CLICKED(IDC_ANSWER, &RinginDlg::OnBnClickedAudio)
-	ON_BN_CLICKED(IDC_DECLINE, &RinginDlg::OnBnClickedDecline)
-	ON_BN_CLICKED(IDC_VIDEO, &RinginDlg::OnBnClickedVideo)
-	ON_BN_CLICKED(IDC_TRANSFER, OnBnClickedTransfer)
+ON_WM_CREATE()
+ON_WM_CLOSE()
+ON_WM_TIMER()
+ON_WM_MOVE()
+ON_WM_SHOWWINDOW()
+ON_BN_CLICKED(IDOK, &RinginDlg::OnBnClickedOk)
+ON_BN_CLICKED(IDCANCEL, &RinginDlg::OnBnClickedCancel)
+ON_BN_CLICKED(IDC_ANSWER, &RinginDlg::OnBnClickedAudio)
+ON_BN_CLICKED(IDC_DECLINE, &RinginDlg::OnBnClickedDecline)
+ON_BN_CLICKED(IDC_VIDEO, &RinginDlg::OnBnClickedVideo)
+ON_BN_CLICKED(IDC_TRANSFER, OnBnClickedTransfer)
+// ── FASE 14: Dark Mode ───────────────────────────
+ON_WM_ERASEBKGND()
+// ─────────────────────────────────────────────────
 END_MESSAGE_MAP()
 
-void RinginDlg::OnClose() 
+void RinginDlg::OnClose()
 {
-	if (accountSettings.noIgnoreCall) {
+	if (accountSettings.noIgnoreCall)
+	{
 		OnBnClickedDecline();
 	}
-	else {
+	else
+	{
 		Close();
 	}
 }
@@ -234,10 +283,12 @@ void RinginDlg::Close(BOOL accept)
 	{
 		if (call_id == mainDlg->ringinDlgs.GetAt(i)->call_id)
 		{
-			if (!accept) {
+			if (!accept)
+			{
 				mainDlg->UpdateWindowText(_T("-"));
 			}
-			if (count == 1) {
+			if (count == 1)
+			{
 				mainDlg->PlayerStop();
 			}
 			mainDlg->ringinDlgs.RemoveAt(i);
@@ -245,7 +296,8 @@ void RinginDlg::Close(BOOL accept)
 			break;
 		}
 	}
-	if (call_id == -1) {
+	if (call_id == -1)
+	{
 		DestroyWindow();
 	}
 }
@@ -261,22 +313,24 @@ void RinginDlg::OnBnClickedCancel()
 
 void RinginDlg::OnBnClickedDecline()
 {
-	if (!answered) {
+	if (!answered)
+	{
 		pjsua_call_info call_info;
 		pjsua_call_get_info(call_id, &call_info);
 		call_user_data *user_data = (call_user_data *)pjsua_call_get_user_data(call_id);
-		if (user_data) {
+		if (user_data)
+		{
 			user_data->CS.Lock();
 			user_data->hangup = true;
 			user_data->CS.Unlock();
-		}		
+		}
 		msip_call_busy(call_id);
 		mainDlg->callIdIncomingIgnore = MSIP::PjToStr(&call_info.call_id);
 	}
 	Close();
 }
 
-void RinginDlg::OnBnClickedAudio() 
+void RinginDlg::OnBnClickedAudio()
 {
 	CallAccept();
 }
@@ -288,17 +342,18 @@ void RinginDlg::OnBnClickedVideo()
 
 void RinginDlg::CallAccept(BOOL hasVideo)
 {
-	if (!answered) {
+	if (!answered)
+	{
 		mainDlg->onCallAnswer((WPARAM)call_id, (LPARAM)hasVideo);
 	}
 }
 
 void RinginDlg::OnShowWindow(BOOL bShow, UINT nStatus)
 {
-	SetTimer(IDT_TIMER_INIT_RINGIN,1000,NULL);
+	SetTimer(IDT_TIMER_INIT_RINGIN, 1000, NULL);
 }
 
-void RinginDlg::OnTimer (UINT_PTR TimerVal)
+void RinginDlg::OnTimer(UINT_PTR TimerVal)
 {
 	if (TimerVal == IDT_TIMER_INIT_RINGIN)
 	{
@@ -308,7 +363,8 @@ void RinginDlg::OnTimer (UINT_PTR TimerVal)
 
 void RinginDlg::OnMove(int x, int y)
 {
-	if (IsWindowVisible() && !IsZoomed() && !IsIconic()) {
+	if (IsWindowVisible() && !IsZoomed() && !IsIconic())
+	{
 		CRect cRect;
 		GetWindowRect(&cRect);
 		accountSettings.ringinX = cRect.left;
@@ -321,3 +377,14 @@ void RinginDlg::OnBnClickedTransfer()
 {
 	mainDlg->OpenTransferDlg(this, MSIP_ACTION_FORWARD, call_id);
 }
+// ── FASE 14: Dark Mode ───────────────────────────────────────────────────────
+
+BOOL RinginDlg::OnEraseBkgnd(CDC *pDC)
+{
+	CRect rect;
+	GetClientRect(&rect);
+	pDC->FillSolidRect(&rect, RGB(28, 28, 28));
+	return TRUE;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────

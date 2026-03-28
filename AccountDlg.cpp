@@ -25,7 +25,14 @@
 #include "atlrx.h"
 #include <ws2tcpip.h>
 #include "json.h"
-
+// ── FASE 14 REVISADO: Dark Mode ──────────────────────
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
+#include <uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
+#include <commctrl.h>
+#pragma comment(lib, "comctl32.lib")
+// ─────────────────────────────────────────────────────
 static CString transportItems[] = {
 	_T("udp"),
 	_T("tcp"),
@@ -39,14 +46,67 @@ static CString transportValues[] = {
 	_T("TLS"),
 };
 
-AccountDlg::AccountDlg(CWnd* pParent /*=NULL*/)
-: CDialog(AccountDlg::IDD, pParent)
+// Botão dark cyberpunk (Salvar / Cancelar)
+static LRESULT CALLBACK AccountButtonSubclassProc(HWND hWnd, UINT uMsg,
+												  WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+	if (uMsg == WM_PAINT)
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = ::BeginPaint(hWnd, &ps);
+		RECT rc;
+		::GetClientRect(hWnd, &rc);
+
+		// Estado pressionado?
+		bool pressed = (::SendMessage(hWnd, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0;
+
+		COLORREF clrBg = pressed ? RGB(120, 0, 60) : RGB(36, 36, 36);
+		COLORREF clrBord = pressed ? RGB(180, 20, 90) : RGB(80, 80, 80);
+		COLORREF clrText = pressed ? RGB(255, 20, 147) : RGB(210, 210, 210);
+
+		// Fundo
+		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
+
+		// Borda
+		HPEN hPen = ::CreatePen(PS_SOLID, 1, clrBord);
+		HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+		::Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+		::SelectObject(hdc, hOldPen);
+		::DeleteObject(hPen);
+
+		// Texto
+		TCHAR szText[128] = {0};
+		::GetWindowText(hWnd, szText, 127);
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, clrText);
+		HFONT hFont = (HFONT)::SendMessage(hWnd, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::DrawText(hdc, szText, -1, &rc,
+				   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		::SelectObject(hdc, hOldFont);
+
+		::EndPaint(hWnd, &ps);
+		return 0;
+	}
+	// Forçar repintura ao hover/press
+	if (uMsg == WM_MOUSEMOVE || uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP)
+	{
+		::InvalidateRect(hWnd, NULL, FALSE);
+	}
+	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+AccountDlg::AccountDlg(CWnd *pParent /*=NULL*/)
+	: CDialog(AccountDlg::IDD, pParent)
 {
 	accountId = -1;
-    if (!Create(IDD, pParent)) {
-        AfxMessageBox(_T("Failed to create account window on your system"));
-        exit(0);
-    }
+	if (!Create(IDD, pParent))
+	{
+		AfxMessageBox(_T("Failed to create account window on your system"));
+		exit(0);
+	}
 }
 
 AccountDlg::~AccountDlg(void)
@@ -55,8 +115,9 @@ AccountDlg::~AccountDlg(void)
 
 int AccountDlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	if (langPack.rtl) {
-		ModifyStyleEx(0,WS_EX_LAYOUTRTL | WS_EX_NOINHERITLAYOUT);
+	if (langPack.rtl)
+	{
+		ModifyStyleEx(0, WS_EX_LAYOUTRTL | WS_EX_NOINHERITLAYOUT);
 	}
 	return 0;
 }
@@ -65,24 +126,24 @@ BOOL AccountDlg::OnInitDialog()
 {
 	CDialog::OnInitDialog();
 
-    CRect rect;
-    GetWindowRect(&rect);
-    width = rect.Width() * 96 / dpiY;
-    height = rect.Height() * 96 / dpiY;
+	CRect rect;
+	GetWindowRect(&rect);
+	width = rect.Width() * 96 / dpiY;
+	height = rect.Height() * 96 / dpiY;
 
 	TranslateDialog(this->m_hWnd);
 
 	CString str;
-	CEdit* edit;
-	str.Format(_T("<a>%s</a>"),Translate(_T("display password")));
+	CEdit *edit;
+	str.Format(_T("<a>%s</a>"), Translate(_T("display password")));
 	GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->SetWindowText(str);
 
-	str.Format(_T("<a>%s</a>"),Translate(_T("Delete Account")));
+	str.Format(_T("<a>%s</a>"), Translate(_T("Delete Account")));
 	GetDlgItem(IDC_SYSLINK_ACCOUNT_DELETE)->SetWindowText(str);
 
 	CComboBox *combobox;
 
-	combobox= (CComboBox*)GetDlgItem(IDC_SRTP);
+	combobox = (CComboBox *)GetDlgItem(IDC_SRTP);
 	combobox->AddString(Translate(_T("Disabled")));
 	str.Format(_T("%s SRTP (RTP/AVP)"), Translate(_T("Optional")));
 	combobox->AddString(str);
@@ -94,40 +155,119 @@ BOOL AccountDlg::OnInitDialog()
 	combobox->AddString(str);
 	combobox->SetCurSel(0);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_TRANSPORT);
+	combobox = (CComboBox *)GetDlgItem(IDC_TRANSPORT);
 	int n = sizeof(transportItems) / sizeof(transportItems[0]);
-	for (int i = 0; i < n; i++) {
+	for (int i = 0; i < n; i++)
+	{
 		combobox->AddString(Translate(transportValues[i].GetBuffer()));
 	}
 	combobox->SetCurSel(0);
 
-	combobox= (CComboBox*)GetDlgItem(IDC_PUBLIC_ADDR);
+	combobox = (CComboBox *)GetDlgItem(IDC_PUBLIC_ADDR);
 	combobox->AddString(Translate(_T("Auto")));
-	char buf[256]={0};
-	if ( gethostname(buf, 256) == 0) {
-		struct addrinfo* l_addrInfo = NULL;
+	char buf[256] = {0};
+	if (gethostname(buf, 256) == 0)
+	{
+		struct addrinfo *l_addrInfo = NULL;
 		struct addrinfo l_addrInfoHints;
 		ZeroMemory(&l_addrInfoHints, sizeof(addrinfo));
 		l_addrInfoHints.ai_socktype = SOCK_STREAM;
 		l_addrInfoHints.ai_family = PF_INET;
-		if ( getaddrinfo(buf,NULL, &l_addrInfoHints,&l_addrInfo) == 0 ) {
-			if (l_addrInfo) {
-				struct addrinfo* l_addrInfoCurrent = l_addrInfo;
-				for (l_addrInfoCurrent = l_addrInfo; l_addrInfoCurrent; l_addrInfoCurrent=l_addrInfoCurrent->ai_next) {
+		if (getaddrinfo(buf, NULL, &l_addrInfoHints, &l_addrInfo) == 0)
+		{
+			if (l_addrInfo)
+			{
+				struct addrinfo *l_addrInfoCurrent = l_addrInfo;
+				for (l_addrInfoCurrent = l_addrInfo; l_addrInfoCurrent; l_addrInfoCurrent = l_addrInfoCurrent->ai_next)
+				{
 					struct sockaddr_in *ipv4 = (struct sockaddr_in *)l_addrInfoCurrent->ai_addr;
-					char * ip = inet_ntoa(ipv4->sin_addr);
+					char *ip = inet_ntoa(ipv4->sin_addr);
 					combobox->AddString(CString(ip));
 				}
 			}
 		}
 	}
 	combobox->SetCurSel(0);
-	if (accountSettings.enableSTUN && !accountSettings.stun.IsEmpty()) {
+	if (accountSettings.enableSTUN && !accountSettings.stun.IsEmpty())
+	{
 		combobox->EnableWindow(FALSE);
 	}
+	// ── FASE 14 REVISADO: Dark Mode ─────────────────────────────────────────
 
-	return TRUE;
-}
+	BOOL darkTitle = TRUE;
+	DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
+
+	SetClassLongPtr(m_hWnd, GCLP_HBRBACKGROUND,
+					(LONG_PTR)::CreateSolidBrush(RGB(28, 28, 28)));
+
+	CWnd *pChild = GetWindow(GW_CHILD);
+	UINT_PTR uId = 200;
+	while (pChild)
+	{
+		TCHAR szClass[64] = {0};
+		::GetClassName(pChild->GetSafeHwnd(), szClass, 63);
+
+		if (_tcsicmp(szClass, _T("ComboBox")) == 0)
+		{
+			// Força owner-draw: o dialog assume 100% do desenho
+			LONG lStyle = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+			lStyle &= ~(CBS_OWNERDRAWVARIABLE);
+			lStyle |= CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
+			::SetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE, lStyle);
+			SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+		}
+		else if (_tcsicmp(szClass, _T("Button")) == 0)
+		{
+			LONG style = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+			LONG tipo = style & BS_TYPEMASK;
+			if (tipo == BS_PUSHBUTTON || tipo == BS_DEFPUSHBUTTON)
+			{
+				// BS_OWNERDRAW — dialog assume 100% do desenho via OnDrawItem
+				LONG lStyle = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+				lStyle &= ~(BS_PUSHBUTTON | BS_DEFPUSHBUTTON);
+				lStyle |= BS_OWNERDRAW;
+				::SetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE, lStyle);
+				SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+			}
+			else
+			{
+				SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+			}
+		}
+		else if (_tcsicmp(szClass, _T("Edit")) == 0)
+		{
+			SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+		}
+
+		pChild = pChild->GetNextWindow();
+	}
+
+	
+
+	// Força repintura de todos os controles após subclass instalada
+	RedrawWindow(NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+
+// Força repintura de todos os controles após owner-draw instalado
+	CWnd* pWnd = GetWindow(GW_CHILD);
+	while (pWnd)
+	{
+		TCHAR szClass[64] = { 0 };
+		::GetClassName(pWnd->GetSafeHwnd(), szClass, 63);
+		if (_tcsicmp(szClass, _T("Button")) == 0)
+		{
+			LONG style = ::GetWindowLong(pWnd->GetSafeHwnd(), GWL_STYLE);
+			if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
+			{
+				::InvalidateRect(pWnd->GetSafeHwnd(), NULL, TRUE);
+				::UpdateWindow(pWnd->GetSafeHwnd());
+			}
+		}
+		pWnd = pWnd->GetNextWindow();
+	}
+
+	// ────────────────────────────────────────────────────────────────────────
+
+	return TRUE;}
 
 void AccountDlg::OnDestroy()
 {
@@ -142,37 +282,41 @@ void AccountDlg::PostNcDestroy()
 }
 
 BEGIN_MESSAGE_MAP(AccountDlg, CDialog)
-	ON_WM_CREATE()
-	ON_WM_SYSCOMMAND()
-	ON_WM_CLOSE()
-	ON_WM_DESTROY()
-	ON_WM_NCHITTEST()
-	ON_BN_CLICKED(IDCANCEL, &AccountDlg::OnBnClickedCancel)
-	ON_BN_CLICKED(IDOK, &AccountDlg::OnBnClickedOk)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_SIP_SERVER, &AccountDlg::OnNMClickSyslinkSipServer)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_SIP_PROXY, &AccountDlg::OnNMClickSyslinkSipProxy)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_USERNAME, &AccountDlg::OnNMClickSyslinkUsername)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_DOMAIN, &AccountDlg::OnNMClickSyslinkDomain)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_AUTHID, &AccountDlg::OnNMClickSyslinkAuthID)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_PASSWORD, &AccountDlg::OnNMClickSyslinkPassword)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_NAME, &AccountDlg::OnNMClickSyslinkName)
-	ON_NOTIFY(NM_CLICK, IDC_ACCOUNT_HELP_DIALING_PREFIX, &AccountDlg::OnNMClickSyslinkDialingPrefix)
-	ON_NOTIFY(NM_CLICK, IDC_ACCOUNT_HELP_DIAL_PLAN, &AccountDlg::OnNMClickSyslinkDialPlan)
-	ON_NOTIFY(NM_CLICK, IDC_ACCOUNT_HELP_HIDE_CID, &AccountDlg::OnNMClickSyslinkHideCID)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_VOICEMAIL, &AccountDlg::OnNMClickSyslinkVoicemail)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_ENCRYPTION, &AccountDlg::OnNMClickSyslinkEncryption)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_TRANSPORT, &AccountDlg::OnNMClickSyslinkTransport)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_PUBLIC_ADDRESS, &AccountDlg::OnNMClickSyslinkPublicAddress)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_PUBLISH_PRESENCE, &AccountDlg::OnNMClickSyslinkPublishPresence)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_ICE, &AccountDlg::OnNMClickSyslinkIce)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_REWRITE, &AccountDlg::OnNMClickSyslinkRewrite)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_SESSION_TIMER, &AccountDlg::OnNMClickSyslinkSessionTimer)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_DISPLAY_PASSWORD, &AccountDlg::OnNMClickSyslinkDisplayPasswod)
-	ON_NOTIFY(NM_RETURN, IDC_SYSLINK_DISPLAY_PASSWORD, &AccountDlg::OnNMClickSyslinkDisplayPasswod)
-	ON_NOTIFY(NM_CLICK, IDC_SYSLINK_ACCOUNT_DELETE, &AccountDlg::OnNMClickSyslinkDelete)
-	ON_NOTIFY(NM_RETURN, IDC_SYSLINK_ACCOUNT_DELETE, &AccountDlg::OnNMClickSyslinkDelete)
-	ON_EN_CHANGE(IDC_EDIT_PASSWORD, &AccountDlg::OnChangePassword)
-	
+ON_WM_CREATE()
+ON_WM_SYSCOMMAND()
+ON_WM_CLOSE()
+ON_WM_DESTROY()
+ON_WM_NCHITTEST()
+ON_BN_CLICKED(IDCANCEL, &AccountDlg::OnBnClickedCancel)
+ON_BN_CLICKED(IDOK, &AccountDlg::OnBnClickedOk)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_SIP_SERVER, &AccountDlg::OnNMClickSyslinkSipServer)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_SIP_PROXY, &AccountDlg::OnNMClickSyslinkSipProxy)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_USERNAME, &AccountDlg::OnNMClickSyslinkUsername)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_DOMAIN, &AccountDlg::OnNMClickSyslinkDomain)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_AUTHID, &AccountDlg::OnNMClickSyslinkAuthID)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_PASSWORD, &AccountDlg::OnNMClickSyslinkPassword)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_NAME, &AccountDlg::OnNMClickSyslinkName)
+ON_NOTIFY(NM_CLICK, IDC_ACCOUNT_HELP_DIALING_PREFIX, &AccountDlg::OnNMClickSyslinkDialingPrefix)
+ON_NOTIFY(NM_CLICK, IDC_ACCOUNT_HELP_DIAL_PLAN, &AccountDlg::OnNMClickSyslinkDialPlan)
+ON_NOTIFY(NM_CLICK, IDC_ACCOUNT_HELP_HIDE_CID, &AccountDlg::OnNMClickSyslinkHideCID)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_VOICEMAIL, &AccountDlg::OnNMClickSyslinkVoicemail)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_ENCRYPTION, &AccountDlg::OnNMClickSyslinkEncryption)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_TRANSPORT, &AccountDlg::OnNMClickSyslinkTransport)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_PUBLIC_ADDRESS, &AccountDlg::OnNMClickSyslinkPublicAddress)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_PUBLISH_PRESENCE, &AccountDlg::OnNMClickSyslinkPublishPresence)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_ICE, &AccountDlg::OnNMClickSyslinkIce)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_REWRITE, &AccountDlg::OnNMClickSyslinkRewrite)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_SESSION_TIMER, &AccountDlg::OnNMClickSyslinkSessionTimer)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_DISPLAY_PASSWORD, &AccountDlg::OnNMClickSyslinkDisplayPasswod)
+ON_NOTIFY(NM_RETURN, IDC_SYSLINK_DISPLAY_PASSWORD, &AccountDlg::OnNMClickSyslinkDisplayPasswod)
+ON_NOTIFY(NM_CLICK, IDC_SYSLINK_ACCOUNT_DELETE, &AccountDlg::OnNMClickSyslinkDelete)
+ON_NOTIFY(NM_RETURN, IDC_SYSLINK_ACCOUNT_DELETE, &AccountDlg::OnNMClickSyslinkDelete)
+ON_EN_CHANGE(IDC_EDIT_PASSWORD, &AccountDlg::OnChangePassword)
+// ── FASE 14: Dark Mode ───────────────────────────
+ON_WM_CTLCOLOR()
+ON_WM_ERASEBKGND()
+ON_WM_DRAWITEM()
+// ─────────────────────────────────────────────────
 END_MESSAGE_MAP()
 
 void AccountDlg::OnSysCommand(UINT nID, LPARAM lParam)
@@ -180,7 +324,7 @@ void AccountDlg::OnSysCommand(UINT nID, LPARAM lParam)
 	__super::OnSysCommand(nID, lParam);
 }
 
-void AccountDlg::OnClose() 
+void AccountDlg::OnClose()
 {
 	DestroyWindow();
 }
@@ -192,7 +336,7 @@ LRESULT AccountDlg::OnNcHitTest(CPoint point)
 	CRect rc;
 	GetClientRect(&rc);
 
-	//rc.bottom = rc.top + 100; 
+	// rc.bottom = rc.top + 100;
 
 	if (rc.PtInRect(point))
 		return HTCAPTION;
@@ -207,26 +351,29 @@ void AccountDlg::OnBnClickedCancel()
 
 void AccountDlg::Load(int id)
 {
-	CEdit* edit;
+	CEdit *edit;
 	CComboBox *combobox;
 	CString str;
 	int i;
 	int n;
 	bool found;
-	
+
 	accountId = id;
-	if (accountSettings.AccountLoad(id, &m_Account)) {
+	if (accountSettings.AccountLoad(id, &m_Account))
+	{
 		accountId = id;
-		if (accountId  && accountSettings.accountId == accountId && !accountSettings.account.rememberPassword) {
+		if (accountId && accountSettings.accountId == accountId && !accountSettings.account.rememberPassword)
+		{
 			m_Account.username = accountSettings.account.username;
 			m_Account.password = accountSettings.account.password;
 			m_Account.rememberPassword = false;
 		}
 	}
-	else {
+	else
+	{
 		accountId = -1;
 	}
-	
+
 	bool isEdit = (accountId > 0 && (!m_Account.username.IsEmpty() || accountId > 1));
 
 	int show = id ? SW_SHOW : SW_HIDE;
@@ -238,188 +385,204 @@ void AccountDlg::Load(int id)
 	GetDlgItem(IDC_ACCOUNT_KEEP_ALIVE)->EnableWindow(id);
 	GetDlgItem(IDC_REWRITE)->EnableWindow(id);
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_LABEL);
 	edit->SetWindowText(m_Account.label);
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_SERVER);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_SERVER);
 	edit->SetWindowText(m_Account.server);
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_PROXY);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_PROXY);
 	edit->SetWindowText(m_Account.proxy);
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_DOMAIN);
 	edit->SetWindowText(m_Account.domain);
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_AUTHID);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_AUTHID);
 	edit->SetWindowText(m_Account.authID);
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_USERNAME);
 	edit->SetWindowText(m_Account.username);
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_PASSWORD);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_PASSWORD);
 	if (
-	accountId == -1 ||
-		m_Account.password.IsEmpty()
-		) {
+		accountId == -1 ||
+		m_Account.password.IsEmpty())
+	{
 		GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->ShowWindow(SW_SHOW);
 	}
-	else {
+	else
+	{
 		GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->ShowWindow(SW_HIDE);
 	}
 	edit->SetPasswordChar('*');
 	edit->SetWindowText(m_Account.password);
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_DISPLAYNAME);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_DISPLAYNAME);
 	edit->SetWindowText(m_Account.displayName);
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIALING_PREFIX);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_DIALING_PREFIX);
 	edit->SetWindowText(m_Account.dialingPrefix);
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIAL_PLAN);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_DIAL_PLAN);
 	edit->SetWindowText(m_Account.dialPlan);
 
-	((CButton*)GetDlgItem(IDC_ACCOUNT_HIDE_CID))->SetCheck(m_Account.hideCID);
+	((CButton *)GetDlgItem(IDC_ACCOUNT_HIDE_CID))->SetCheck(m_Account.hideCID);
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_VOICEMAIL);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_VOICEMAIL);
 	edit->SetWindowText(m_Account.voicemailNumber);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SRTP);
-	if (m_Account.srtp == _T("optional")) {
+	combobox = (CComboBox *)GetDlgItem(IDC_SRTP);
+	if (m_Account.srtp == _T("optional"))
+	{
 		i = 1;
 	}
-	else if (m_Account.srtp == _T("mandatory")) {
+	else if (m_Account.srtp == _T("mandatory"))
+	{
 		i = 2;
 	}
-	else if (m_Account.srtp == _T("dtls-sdes")) {
+	else if (m_Account.srtp == _T("dtls-sdes"))
+	{
 		i = 3;
 	}
-	else if (m_Account.srtp == _T("dtls")) {
+	else if (m_Account.srtp == _T("dtls"))
+	{
 		i = 4;
 	}
-	else {
+	else
+	{
 		i = 0;
 	}
-	if (i > 0) {
+	if (i > 0)
+	{
 		combobox->SetCurSel(i);
 	}
 
-	combobox = (CComboBox*)GetDlgItem(IDC_TRANSPORT);
+	combobox = (CComboBox *)GetDlgItem(IDC_TRANSPORT);
 	n = sizeof(transportItems) / sizeof(transportItems[0]);
 	found = false;
-	for (int i = 0; i < n; i++) {
-		if (m_Account.transport == transportItems[i]) {
+	for (int i = 0; i < n; i++)
+	{
+		if (m_Account.transport == transportItems[i])
+		{
 			combobox->SetCurSel(i);
 			found = true;
 		}
 	}
-	if (!found) {
+	if (!found)
+	{
 		combobox->SetCurSel(0);
 	}
 
-	combobox = (CComboBox*)GetDlgItem(IDC_PUBLIC_ADDR);
-	if (combobox->IsWindowEnabled()) {
+	combobox = (CComboBox *)GetDlgItem(IDC_PUBLIC_ADDR);
+	if (combobox->IsWindowEnabled())
+	{
 		str = get_public_addr(&m_Account);
-		if (!str.IsEmpty()) {
+		if (!str.IsEmpty())
+		{
 			combobox->SetWindowText(str);
 		}
 	}
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_REGISTER_REFRESH);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_REGISTER_REFRESH);
 	str.Format(_T("%d"), m_Account.registerRefresh);
 	edit->SetWindowText(str);
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_KEEP_ALIVE);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_KEEP_ALIVE);
 	str.Format(_T("%d"), m_Account.keepAlive);
 	edit->SetWindowText(str);
 
-	((CButton*)GetDlgItem(IDC_PUBLISH))->SetCheck(m_Account.publish);
+	((CButton *)GetDlgItem(IDC_PUBLISH))->SetCheck(m_Account.publish);
 
-	((CButton*)GetDlgItem(IDC_REWRITE))->SetCheck(m_Account.allowRewrite);
+	((CButton *)GetDlgItem(IDC_REWRITE))->SetCheck(m_Account.allowRewrite);
 
-	((CButton*)GetDlgItem(IDC_ICE))->SetCheck(m_Account.ice);
+	((CButton *)GetDlgItem(IDC_ICE))->SetCheck(m_Account.ice);
 
-	((CButton*)GetDlgItem(IDC_SESSION_TIMER))->SetCheck(m_Account.disableSessionTimer);
-    if (isEdit) {
-        GetDlgItem(IDC_SYSLINK_ACCOUNT_DELETE)->ShowWindow(SW_SHOW);
-    }
-    else {
-        GetDlgItem(IDC_SYSLINK_ACCOUNT_DELETE)->ShowWindow(SW_HIDE);
-    }
+	((CButton *)GetDlgItem(IDC_SESSION_TIMER))->SetCheck(m_Account.disableSessionTimer);
+	if (isEdit)
+	{
+		GetDlgItem(IDC_SYSLINK_ACCOUNT_DELETE)->ShowWindow(SW_SHOW);
+	}
+	else
+	{
+		GetDlgItem(IDC_SYSLINK_ACCOUNT_DELETE)->ShowWindow(SW_HIDE);
+	}
 }
 
 void AccountDlg::OnBnClickedOk()
 {
-	CEdit* edit;
+	CEdit *edit;
 	CString str;
 	CComboBox *combobox;
 	int i;
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_LABEL);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_LABEL);
 	edit->GetWindowText(str);
-	m_Account.label=str.Trim();
+	m_Account.label = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_SERVER);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_SERVER);
 	edit->GetWindowText(str);
-	m_Account.server=str.Trim();
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_PROXY);
+	m_Account.server = str.Trim();
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_PROXY);
 	edit->GetWindowText(str);
-	m_Account.proxy=str.Trim();
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_DOMAIN);
+	m_Account.proxy = str.Trim();
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_DOMAIN);
 	edit->GetWindowText(str);
-	m_Account.domain=str.Trim();
+	m_Account.domain = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_AUTHID);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_AUTHID);
 	edit->GetWindowText(str);
-	m_Account.authID=str.Trim();
+	m_Account.authID = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_USERNAME);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_USERNAME);
 	edit->GetWindowText(str);
-	m_Account.username=str.Trim();
+	m_Account.username = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_PASSWORD);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_PASSWORD);
 	edit->GetWindowText(str);
-	m_Account.password=str.Trim();
+	m_Account.password = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_DISPLAYNAME);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_DISPLAYNAME);
 	edit->GetWindowText(str);
-	m_Account.displayName=str.Trim();
+	m_Account.displayName = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIALING_PREFIX);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_DIALING_PREFIX);
 	edit->GetWindowText(str);
-	m_Account.dialingPrefix=str.Trim();
+	m_Account.dialingPrefix = str.Trim();
 
-	edit = (CEdit*)GetDlgItem(IDC_ACCOUNT_DIAL_PLAN);
+	edit = (CEdit *)GetDlgItem(IDC_ACCOUNT_DIAL_PLAN);
 	edit->GetWindowText(str);
 	m_Account.dialPlan = str.Trim();
 
-	m_Account.hideCID = ((CButton*)GetDlgItem(IDC_ACCOUNT_HIDE_CID))->GetCheck();
+	m_Account.hideCID = ((CButton *)GetDlgItem(IDC_ACCOUNT_HIDE_CID))->GetCheck();
 
-	edit = (CEdit*)GetDlgItem(IDC_EDIT_VOICEMAIL);
+	edit = (CEdit *)GetDlgItem(IDC_EDIT_VOICEMAIL);
 	edit->GetWindowText(str);
-	m_Account.voicemailNumber=str.Trim();
+	m_Account.voicemailNumber = str.Trim();
 
-	combobox= (CComboBox*)GetDlgItem(IDC_SRTP);
+	combobox = (CComboBox *)GetDlgItem(IDC_SRTP);
 	i = combobox->GetCurSel();
-	switch (i) {
-		case 1:
-			m_Account.srtp=_T("optional");
-			break;
-		case 2:
-			m_Account.srtp=_T("mandatory");
-			break;
-		case 3:
-			m_Account.srtp=_T("dtls-sdes");
-			break;
-		case 4:
-			m_Account.srtp=_T("dtls");
-			break;
-		default:
-			m_Account.srtp=_T("");
+	switch (i)
+	{
+	case 1:
+		m_Account.srtp = _T("optional");
+		break;
+	case 2:
+		m_Account.srtp = _T("mandatory");
+		break;
+	case 3:
+		m_Account.srtp = _T("dtls-sdes");
+		break;
+	case 4:
+		m_Account.srtp = _T("dtls");
+		break;
+	default:
+		m_Account.srtp = _T("");
 	}
 
-	combobox= (CComboBox*)GetDlgItem(IDC_TRANSPORT);
+	combobox = (CComboBox *)GetDlgItem(IDC_TRANSPORT);
 	m_Account.transport = transportItems[combobox->GetCurSel()];
 
-	combobox= (CComboBox*)GetDlgItem(IDC_PUBLIC_ADDR);
-	if (combobox->IsWindowEnabled()) {
+	combobox = (CComboBox *)GetDlgItem(IDC_PUBLIC_ADDR);
+	if (combobox->IsWindowEnabled())
+	{
 		i = combobox->GetCurSel();
 		combobox->GetWindowText(m_Account.publicAddr);
 		if (m_Account.publicAddr == Translate(_T("Auto")))
@@ -432,28 +595,32 @@ void AccountDlg::OnBnClickedOk()
 
 	GetDlgItem(IDC_ACCOUNT_REGISTER_REFRESH)->GetWindowText(str);
 	m_Account.registerRefresh = _wtoi(str);
-	if (m_Account.registerRefresh <= 0) {
+	if (m_Account.registerRefresh <= 0)
+	{
 		m_Account.registerRefresh = PJSUA_REG_INTERVAL;
 	}
 
 	GetDlgItem(IDC_ACCOUNT_KEEP_ALIVE)->GetWindowText(str);
 	m_Account.keepAlive = _wtoi(str);
-	if (m_Account.keepAlive < 0) {
+	if (m_Account.keepAlive < 0)
+	{
 		m_Account.keepAlive = 15;
 	}
 
-	m_Account.publish = ((CButton*)GetDlgItem(IDC_PUBLISH))->GetCheck();
+	m_Account.publish = ((CButton *)GetDlgItem(IDC_PUBLISH))->GetCheck();
 
-	m_Account.allowRewrite = ((CButton*)GetDlgItem(IDC_REWRITE))->GetCheck();
+	m_Account.allowRewrite = ((CButton *)GetDlgItem(IDC_REWRITE))->GetCheck();
 
-	m_Account.ice = ((CButton*)GetDlgItem(IDC_ICE))->GetCheck();
+	m_Account.ice = ((CButton *)GetDlgItem(IDC_ICE))->GetCheck();
 
-	m_Account.disableSessionTimer = ((CButton*)GetDlgItem(IDC_SESSION_TIMER))->GetCheck();
+	m_Account.disableSessionTimer = ((CButton *)GetDlgItem(IDC_SESSION_TIMER))->GetCheck();
 
 	if (
 		m_Account.domain.IsEmpty() ||
-		m_Account.username.IsEmpty()) {
-		if (accountId != 0) {
+		m_Account.username.IsEmpty())
+	{
+		if (accountId != 0)
+		{
 			CString str;
 			str.Append(Translate(_T("Please fill out at least the required fields marked with *.")));
 			str.AppendFormat(_T(" %s"), Translate(_T("Ask your SIP provider how to configure the account correctly.")));
@@ -465,11 +632,14 @@ void AccountDlg::OnBnClickedOk()
 	this->ShowWindow(SW_HIDE);
 	mainDlg->accountDlg = NULL;
 
-	if (accountId == -1) { // find id for new account
+	if (accountId == -1)
+	{ // find id for new account
 		Account dummy;
 		int i = 1;
-		while (true) {
-			if (!accountSettings.AccountLoad(i, &dummy)) {
+		while (true)
+		{
+			if (!accountSettings.AccountLoad(i, &dummy))
+			{
 				break;
 			}
 			i++;
@@ -479,13 +649,15 @@ void AccountDlg::OnBnClickedOk()
 
 	accountSettings.AccountSave(accountId, &m_Account);
 
-	if (accountId) {
+	if (accountId)
+	{
 		mainDlg->PJAccountDelete(true);
 
 		accountSettings.accountId = accountId;
 		accountSettings.account = m_Account;
 		accountSettings.AccountLoad(accountSettings.accountId, &accountSettings.account);
-		if (!m_Account.rememberPassword) {
+		if (!m_Account.rememberPassword)
+		{
 			accountSettings.account.username = m_Account.username;
 			accountSettings.account.password = m_Account.password;
 			accountSettings.account.rememberPassword = false;
@@ -494,7 +666,9 @@ void AccountDlg::OnBnClickedOk()
 		mainDlg->InitUI();
 		accountSettings.SettingsSave();
 		mainDlg->PJAccountAdd();
-	} else {
+	}
+	else
+	{
 		// local account
 		mainDlg->PJAccountDeleteLocal();
 		accountSettings.AccountLoad(0, &accountSettings.accountLocal);
@@ -614,40 +788,47 @@ void AccountDlg::OnNMClickSyslinkSessionTimer(NMHDR *pNMHDR, LRESULT *pResult)
 void AccountDlg::OnNMClickSyslinkDisplayPasswod(NMHDR *pNMHDR, LRESULT *pResult)
 {
 	GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->ShowWindow(SW_HIDE);
-	CEdit* edit = (CEdit*)GetDlgItem(IDC_EDIT_PASSWORD);
+	CEdit *edit = (CEdit *)GetDlgItem(IDC_EDIT_PASSWORD);
 	edit->SetPasswordChar(0);
 	edit->Invalidate();
 	edit->SetFocus();
 	int nLength = edit->GetWindowTextLength();
-	edit->SetSel(nLength,nLength);
+	edit->SetSel(nLength, nLength);
 	*pResult = 0;
 }
 
 void AccountDlg::OnNMClickSyslinkDelete(NMHDR *pNMHDR, LRESULT *pResult)
 {
-	if (accountId>0 && AfxMessageBox(Translate(_T("Are you sure you want to delete?")), MB_YESNO)==IDYES) {
+	if (accountId > 0 && AfxMessageBox(Translate(_T("Are you sure you want to delete?")), MB_YESNO) == IDYES)
+	{
 		this->ShowWindow(SW_HIDE);
 		mainDlg->accountDlg = NULL;
 
 		Account account;
 		int i = accountId;
-		while (true) {
-			if (!accountSettings.AccountLoad(i+1,&account)) {
+		while (true)
+		{
+			if (!accountSettings.AccountLoad(i + 1, &account))
+			{
 				break;
 			}
-			accountSettings.AccountSave(i,&account);
+			accountSettings.AccountSave(i, &account);
 			i++;
 		}
 		accountSettings.AccountDelete(i);
-		if (accountId && accountId == accountSettings.accountId) {
+		if (accountId && accountId == accountSettings.accountId)
+		{
 			mainDlg->PJAccountDelete(true);
-			if (i>1) {
+			if (i > 1)
+			{
 				accountSettings.accountId = 1;
-				accountSettings.AccountLoad(accountSettings.accountId,&accountSettings.account);
+				accountSettings.AccountLoad(accountSettings.accountId, &accountSettings.account);
 				mainDlg->OnAccountChanged();
 				mainDlg->InitUI();
 				mainDlg->PJAccountAdd();
-			} else {
+			}
+			else
+			{
 				accountSettings.accountId = 0;
 				mainDlg->OnAccountChanged();
 				mainDlg->InitUI();
@@ -663,11 +844,148 @@ void AccountDlg::OnChangePassword()
 {
 	CString str;
 	GetDlgItem(IDC_EDIT_PASSWORD)->GetWindowText(str);
-	if (str.IsEmpty()) {
+	if (str.IsEmpty())
+	{
 		GetDlgItem(IDC_SYSLINK_DISPLAY_PASSWORD)->ShowWindow(SW_SHOW);
-		CEdit* edit = (CEdit*)GetDlgItem(IDC_EDIT_PASSWORD);
+		CEdit *edit = (CEdit *)GetDlgItem(IDC_EDIT_PASSWORD);
 		edit->SetPasswordChar('*');
 	}
 }
 
+// ── FASE 14 REVISADO: Dark Mode ──────────────────────────────────────────────
 
+HBRUSH AccountDlg::OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor)
+{
+	static HBRUSH hBrushDark = ::CreateSolidBrush(RGB(28, 28, 28));
+	static HBRUSH hBrushControl = ::CreateSolidBrush(RGB(36, 36, 36));
+
+	switch (nCtlColor)
+	{
+	case CTLCOLOR_STATIC:
+		// Labels, texto de grupo e texto de checkbox/radio — branco
+		pDC->SetBkMode(TRANSPARENT);
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushDark;
+
+	case CTLCOLOR_BTN:
+		// Checkbox e radio button — branco
+		pDC->SetBkMode(TRANSPARENT);
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushDark;
+
+	case CTLCOLOR_EDIT:
+		// Campos de texto (CEdit)
+		pDC->SetBkColor(RGB(36, 36, 36));
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushControl;
+
+	case CTLCOLOR_LISTBOX:
+		// Dropdown aberto do ComboBox
+		pDC->SetBkColor(RGB(36, 36, 36));
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushControl;
+
+	default:
+		pDC->SetBkColor(RGB(28, 28, 28));
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushDark;
+	}
+}
+
+BOOL AccountDlg::OnEraseBkgnd(CDC *pDC)
+{
+	CRect rect;
+	GetClientRect(&rect);
+	pDC->FillSolidRect(&rect, RGB(28, 28, 28));
+	return TRUE;
+}
+
+void AccountDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
+{
+	HDC hdc = lpDIS->hDC;
+	RECT rc = lpDIS->rcItem;
+	UINT state = lpDIS->itemState;
+
+	// ── Botão owner-draw ─────────────────────────────────────────────────────
+	if (lpDIS->CtlType == ODT_BUTTON)
+	{
+		bool pressed = (state & ODS_SELECTED) != 0;
+		bool focused = (state & ODS_FOCUS) != 0;
+		bool disabled = (state & ODS_DISABLED) != 0;
+
+		COLORREF clrBg = pressed ? RGB(120, 0, 60) : disabled ? RGB(28, 28, 28)
+		: RGB(36, 36, 36);
+		COLORREF clrBord = focused ? RGB(180, 20, 90) : pressed ? RGB(180, 20, 90)
+																: RGB(80, 80, 80);
+		COLORREF clrText = pressed ? RGB(255, 20, 147) : disabled ? RGB(80, 80, 80)
+		: RGB(210, 210, 210);
+
+		// Fundo
+		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
+
+		// Borda
+		HPEN hPen = ::CreatePen(PS_SOLID, 1, clrBord);
+		HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+		::Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+		::SelectObject(hdc, hOldPen);
+		::DeleteObject(hPen);
+
+		// Texto
+		TCHAR szText[128] = {0};
+		::GetWindowText(lpDIS->hwndItem, szText, 127);
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, clrText);
+		HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::DrawText(hdc, szText, -1, &rc,
+		DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		::SelectObject(hdc, hOldFont);
+
+		return;
+	}
+
+	// ── ComboBox owner-draw ──────────────────────────────────────────────────
+	if (lpDIS->CtlType == ODT_COMBOBOX)
+	{
+		COLORREF clrBg = (state & ODS_SELECTED) ? RGB(80, 0, 40) : RGB(36, 36, 36);
+		COLORREF clrText = (state & ODS_SELECTED) ? RGB(255, 180, 210) : RGB(210, 210, 210);
+
+		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
+
+		if (lpDIS->itemID != (UINT)-1)
+		{
+			TCHAR szText[256] = {0};
+			CComboBox *pCombo = (CComboBox *)GetDlgItem(nIDCtl);
+			if (pCombo)
+				pCombo->GetLBText(lpDIS->itemID, szText);
+
+			::SetBkMode(hdc, TRANSPARENT);
+			::SetTextColor(hdc, clrText);
+			RECT rcText = rc;
+			rcText.left += 4;
+			HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
+			HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+			::DrawText(hdc, szText, -1, &rcText,
+			DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+			::SelectObject(hdc, hOldFont);
+		}
+
+		if (state & ODS_FOCUS)
+		{
+			RECT rcFocus = rc;
+			::InflateRect(&rcFocus, -1, -1);
+			HPEN hPen = ::CreatePen(PS_SOLID, 1, RGB(180, 20, 90));
+			HPEN hOld = (HPEN)::SelectObject(hdc, hPen);
+			::SelectObject(hdc, ::GetStockObject(HOLLOW_BRUSH));
+			::Rectangle(hdc, rcFocus.left, rcFocus.top,
+						rcFocus.right, rcFocus.bottom);
+			::SelectObject(hdc, hOld);
+			::DeleteObject(hPen);
+		}
+		return;
+	}
+
+	CDialog::OnDrawItem(nIDCtl, lpDIS);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────

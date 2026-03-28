@@ -79,6 +79,7 @@ public:
 	afx_msg void OnNMClickSyslinkRandomAnswerBox(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNMClickSyslinkEnableLocal(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNMClickSyslinkCrashReport(NMHDR *pNMHDR, LRESULT *pResult);
+
 #ifdef _GLOBAL_VIDEO
 	afx_msg void OnBnClickedPreview();
 #endif
@@ -92,5 +93,10 @@ public:
 	afx_msg void OnBnClickedAAOptions();
 	afx_msg void OnBnClickedDnsSrv();
 	afx_msg void OnBnClickedStun();
+	// ── FASE 14: Dark Mode ───────────────────────────────
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	afx_msg BOOL   OnEraseBkgnd(CDC* pDC);
+	afx_msg void   OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS);
+	// ────────────────────────────────────────────────────
 };
 

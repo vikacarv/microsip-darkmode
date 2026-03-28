@@ -24,14 +24,16 @@
 #include "const.h"
 #include "settings.h"
 
-class AccountDlg :
-	public CDialog
+class AccountDlg : public CDialog
 {
 public:
-	//CFont m_font;
-	AccountDlg(CWnd* pParent = NULL);	// standard constructor
+	// CFont m_font;
+	AccountDlg(CWnd *pParent = NULL); // standard constructor
 	~AccountDlg();
-	enum { IDD = IDD_ACCOUNT };
+	enum
+	{
+		IDD = IDD_ACCOUNT
+	};
 
 	void Load(int id);
 
@@ -40,14 +42,14 @@ private:
 	int height;
 	int accountId;
 	Account m_Account;
+
 protected:
 	virtual BOOL OnInitDialog();
 	afx_msg void OnDestroy();
 	virtual void PostNcDestroy();
 	DECLARE_MESSAGE_MAP()
 public:
-
-Account m_Account1;
+	Account m_Account1;
 
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);
@@ -76,4 +78,9 @@ Account m_Account1;
 	afx_msg void OnNMClickSyslinkRewrite(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNMClickSyslinkSessionTimer(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNMClickSyslinkDisplayPasswod(NMHDR *pNMHDR, LRESULT *pResult);
+	// ── FASE 14 REVISADO: Dark Mode ──────────────────
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	afx_msg BOOL   OnEraseBkgnd(CDC* pDC);
+	afx_msg void   OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS);
+	// ─────────────────────────────────────────────────
 };

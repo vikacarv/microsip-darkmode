@@ -24,31 +24,84 @@
 #include "Preview.h"
 #include "langpack.h"
 #include <afxshellmanager.h>
+// ── FASE 14: Dark Mode ───────────────────────────────
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
+#include <uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
+// ─────────────────────────────────────────────────────
+
+static LRESULT CALLBACK SettingsButtonSubclassProc(HWND hWnd, UINT uMsg,
+												   WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
+{
+	if (uMsg == WM_PAINT)
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = ::BeginPaint(hWnd, &ps);
+		RECT rc;
+		::GetClientRect(hWnd, &rc);
+
+		bool pressed = (::SendMessage(hWnd, BM_GETSTATE, 0, 0) & BST_PUSHED) != 0;
+
+		COLORREF clrBg = pressed ? RGB(120, 0, 60) : RGB(36, 36, 36);
+		COLORREF clrBord = pressed ? RGB(180, 20, 90) : RGB(80, 80, 80);
+		COLORREF clrText = pressed ? RGB(255, 20, 147) : RGB(210, 210, 210);
+
+		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
+
+		HPEN hPen = ::CreatePen(PS_SOLID, 1, clrBord);
+		HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+		::Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+		::SelectObject(hdc, hOldPen);
+		::DeleteObject(hPen);
+
+		TCHAR szText[128] = {0};
+		::GetWindowText(hWnd, szText, 127);
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, clrText);
+		HFONT hFont = (HFONT)::SendMessage(hWnd, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::DrawText(hdc, szText, -1, &rc,
+				   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		::SelectObject(hdc, hOldFont);
+
+		::EndPaint(hWnd, &ps);
+		return 0;
+	}
+	if (uMsg == WM_MOUSEMOVE || uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP)
+	{
+		::InvalidateRect(hWnd, NULL, FALSE);
+	}
+	return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 static CString defaultActionItems[] = {
-_T(""),
-_T("call"),
+	_T(""),
+	_T("call"),
 #ifdef _GLOBAL_VIDEO
-_T("video"),
+	_T("video"),
 #endif
-_T("message"),
+	_T("message"),
 };
 static CString defaultActionValues[] = {
-_T("Default"),
-_T("Call"),
+	_T("Default"),
+	_T("Call"),
 #ifdef _GLOBAL_VIDEO
-_T("Video Call"),
+	_T("Video Call"),
 #endif
-_T("Message"),
+	_T("Message"),
 };
 
-SettingsDlg::SettingsDlg(CWnd* pParent /*=NULL*/)
+SettingsDlg::SettingsDlg(CWnd *pParent /*=NULL*/)
 	: CDialog(SettingsDlg::IDD, pParent)
 {
-    if (!Create(IDD, pParent)) {
-        AfxMessageBox(_T("Failed to create settings window on your system"));
-        exit(0);
-    }
+	if (!Create(IDD, pParent))
+	{
+		AfxMessageBox(_T("Failed to create settings window on your system"));
+		exit(0);
+	}
 }
 
 SettingsDlg::~SettingsDlg(void)
@@ -57,7 +110,8 @@ SettingsDlg::~SettingsDlg(void)
 
 int SettingsDlg::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
-	if (langPack.rtl) {
+	if (langPack.rtl)
+	{
 		ModifyStyleEx(0, WS_EX_LAYOUTRTL);
 	}
 	return 0;
@@ -80,124 +134,139 @@ BOOL SettingsDlg::OnInitDialog()
 
 	TranslateDialog(this->m_hWnd);
 
-	str.Format(_T("<a>%s</a>"),Translate(_T("Feature Codes")));
+	str.Format(_T("<a>%s</a>"), Translate(_T("Feature Codes")));
 	GetDlgItem(IDC_SETTINGS_FEATURE_CODES)->SetWindowText(str);
 
 	GetDlgItem(IDC_SETTINGS_RINGTONE)->SetWindowText(accountSettings.ringtone);
-	((CSliderCtrl*)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->SetRange(0, 100);
-	((CSliderCtrl*)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->SetPos(accountSettings.volumeRing);
+	((CSliderCtrl *)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->SetRange(0, 100);
+	((CSliderCtrl *)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->SetPos(accountSettings.volumeRing);
 	GetDlgItem(IDC_SETTINGS_RECORDING)->SetWindowText(accountSettings.recordingPath);
-	if (accountSettings.recordingFormat == _T("wav")) {
+	if (accountSettings.recordingFormat == _T("wav"))
+	{
 		CheckRadioButton(IDC_SETTINGS_RECORDING_MP3, IDC_SETTINGS_RECORDING_WAV, IDC_SETTINGS_RECORDING_WAV);
 	}
-	else {
+	else
+	{
 		CheckRadioButton(IDC_SETTINGS_RECORDING_MP3, IDC_SETTINGS_RECORDING_WAV, IDC_SETTINGS_RECORDING_MP3);
 	}
-	((CButton*)GetDlgItem(IDC_SETTINGS_RECORDING_CHECKBOX))->SetCheck(accountSettings.autoRecording);
-	((CButton*)GetDlgItem(IDC_SETTINGS_RECORDING_BUTTON))->SetCheck(accountSettings.recordingButton);
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_MICROPHONE);
+	((CButton *)GetDlgItem(IDC_SETTINGS_RECORDING_CHECKBOX))->SetCheck(accountSettings.autoRecording);
+	((CButton *)GetDlgItem(IDC_SETTINGS_RECORDING_BUTTON))->SetCheck(accountSettings.recordingButton);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_MICROPHONE);
 	combobox->AddString(Translate(_T("Default")));
 	combobox->SetCurSel(0);
 	pjmedia_aud_dev_info aud_dev_info[PJMEDIA_AUD_MAX_DEVS];
-	if (is_pjsua_running()) {
+	if (is_pjsua_running())
+	{
 		count = PJMEDIA_AUD_MAX_DEVS;
 		pjsua_enum_aud_devs(aud_dev_info, &count);
 	}
-	else {
+	else
+	{
 		count = 0;
 	}
 	for (unsigned i = 0; i < count; i++)
 	{
-		if (aud_dev_info[i].input_count) {
+		if (aud_dev_info[i].input_count)
+		{
 			CString audDevName = MSIP::Utf8DecodeUni(aud_dev_info[i].name);
 			combobox->AddString(audDevName);
-			if (!accountSettings.audioInputDevice.Compare(audDevName)) {
+			if (!accountSettings.audioInputDevice.Compare(audDevName))
+			{
 				combobox->SetCurSel(combobox->GetCount() - 1);
 			}
 		}
 	}
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_SPEAKERS);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_SPEAKERS);
 	combobox->AddString(Translate(_T("Default")));
 	combobox->SetCurSel(0);
-	CComboBox* comboboxRing = (CComboBox*)GetDlgItem(IDC_SETTINGS_RING);
+	CComboBox *comboboxRing = (CComboBox *)GetDlgItem(IDC_SETTINGS_RING);
 	comboboxRing->AddString(Translate(_T("Default")));
 	comboboxRing->SetCurSel(0);
 	for (unsigned i = 0; i < count; i++)
 	{
-		if (aud_dev_info[i].output_count) {
+		if (aud_dev_info[i].output_count)
+		{
 			CString audDevName = MSIP::Utf8DecodeUni(aud_dev_info[i].name);
 			combobox->AddString(audDevName);
 			comboboxRing->AddString(audDevName);
-			if (!accountSettings.audioOutputDevice.Compare(audDevName)) {
+			if (!accountSettings.audioOutputDevice.Compare(audDevName))
+			{
 				combobox->SetCurSel(combobox->GetCount() - 1);
 			}
-			if (!accountSettings.audioRingDevice.Compare(audDevName)) {
+			if (!accountSettings.audioRingDevice.Compare(audDevName))
+			{
 				comboboxRing->SetCurSel(comboboxRing->GetCount() - 1);
 			}
 		}
 	}
-	((CButton*)GetDlgItem(IDC_SETTINGS_MIC_AMPLIF))->SetCheck(accountSettings.micAmplification);
-	((CButton*)GetDlgItem(IDC_SETTINGS_SW_ADJUST))->SetCheck(accountSettings.swLevelAdjustment);
+	((CButton *)GetDlgItem(IDC_SETTINGS_MIC_AMPLIF))->SetCheck(accountSettings.micAmplification);
+	((CButton *)GetDlgItem(IDC_SETTINGS_SW_ADJUST))->SetCheck(accountSettings.swLevelAdjustment);
 
 	pjsua_codec_info codec_info[PJMEDIA_CODEC_MGR_MAX_CODECS];
 	CListBox *listbox;
-	listbox = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS_ALL);
+	listbox = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS_ALL);
 	CListBox *listbox2;
-	listbox2 = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
+	listbox2 = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
 
 	CList<CString> disabledCodecsList;
-	if (is_pjsua_running()) {
+	if (is_pjsua_running())
+	{
 		count = PJMEDIA_CODEC_MGR_MAX_CODECS;
 		pjsua_enum_codecs(codec_info, &count);
 	}
-	else {
+	else
+	{
 		count = 0;
 	}
 	for (unsigned i = 0; i < count; i++)
 	{
-			POSITION pos = mainDlg->audioCodecList.Find(
-				MSIP::PjToStr(&codec_info[i].codec_id)
-			);
-			CString key = mainDlg->audioCodecList.GetNext(pos);
-			CString value = mainDlg->audioCodecList.GetNext(pos);
-			if (codec_info[i].priority
-				&& (!accountSettings.audioCodecs.IsEmpty() || StrStr(_T(_GLOBAL_CODECS_ENABLED), key))
-				) {
-				if (listbox2->FindString(0, value)==-1) {
-					listbox2->AddString(value);
-				}
-			}
-			else {
-				disabledCodecsList.AddTail(key);
-			}
-	}
-	POSITION pos = mainDlg->audioCodecList.GetHeadPosition();
-	while (pos) {
+		POSITION pos = mainDlg->audioCodecList.Find(
+			MSIP::PjToStr(&codec_info[i].codec_id));
 		CString key = mainDlg->audioCodecList.GetNext(pos);
 		CString value = mainDlg->audioCodecList.GetNext(pos);
-		if (disabledCodecsList.Find(key)) {
+		if (codec_info[i].priority && (!accountSettings.audioCodecs.IsEmpty() || StrStr(_T(_GLOBAL_CODECS_ENABLED), key)))
+		{
+			if (listbox2->FindString(0, value) == -1)
+			{
+				listbox2->AddString(value);
+			}
+		}
+		else
+		{
+			disabledCodecsList.AddTail(key);
+		}
+	}
+	POSITION pos = mainDlg->audioCodecList.GetHeadPosition();
+	while (pos)
+	{
+		CString key = mainDlg->audioCodecList.GetNext(pos);
+		CString value = mainDlg->audioCodecList.GetNext(pos);
+		if (disabledCodecsList.Find(key))
+		{
 			listbox->AddString(value);
 		}
 	}
 
-	((CButton*)GetDlgItem(IDC_SETTINGS_VAD))->SetCheck(accountSettings.vad);
-	((CButton*)GetDlgItem(IDC_SETTINGS_EC))->SetCheck(accountSettings.ec);
-	((CButton*)GetDlgItem(IDC_SETTINGS_OPUS_STEREO))->SetCheck(accountSettings.opusStereo);
-	((CButton*)GetDlgItem(IDC_SETTINGS_FORCE_CODEC))->SetCheck(accountSettings.forceCodec);
+	((CButton *)GetDlgItem(IDC_SETTINGS_VAD))->SetCheck(accountSettings.vad);
+	((CButton *)GetDlgItem(IDC_SETTINGS_EC))->SetCheck(accountSettings.ec);
+	((CButton *)GetDlgItem(IDC_SETTINGS_OPUS_STEREO))->SetCheck(accountSettings.opusStereo);
+	((CButton *)GetDlgItem(IDC_SETTINGS_FORCE_CODEC))->SetCheck(accountSettings.forceCodec);
 
 #ifdef _GLOBAL_VIDEO
-	((CButton*)GetDlgItem(IDC_SETTINGS_DISABLE_VIDEO))->SetCheck(accountSettings.disableVideo);
+	((CButton *)GetDlgItem(IDC_SETTINGS_DISABLE_VIDEO))->SetCheck(accountSettings.disableVideo);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_VID_CAP_DEV);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_VID_CAP_DEV);
 	combobox->AddString(Translate(_T("Default")));
 	combobox->SetCurSel(0);
 
 	pjmedia_vid_dev_info vid_dev_info[PJMEDIA_VID_DEV_MAX_DEVS];
-	if (is_pjsua_running()) {
+	if (is_pjsua_running())
+	{
 		count = PJMEDIA_VID_DEV_MAX_DEVS;
 		pjsua_vid_enum_devs(vid_dev_info, &count);
 	}
-	else {
+	else
+	{
 		count = 0;
 	}
 	for (unsigned i = 0; i < count; i++)
@@ -213,14 +282,16 @@ BOOL SettingsDlg::OnInitDialog()
 		}
 	}
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_VIDEO_CODEC);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_VIDEO_CODEC);
 	combobox->AddString(Translate(_T("Default")));
 	combobox->SetCurSel(0);
-	if (is_pjsua_running()) {
+	if (is_pjsua_running())
+	{
 		count = PJMEDIA_CODEC_MGR_MAX_CODECS;
 		pjsua_vid_enum_codecs(codec_info, &count);
 	}
-	else {
+	else
+	{
 		count = 0;
 	}
 	for (unsigned i = 0; i < count; i++)
@@ -232,13 +303,15 @@ BOOL SettingsDlg::OnInitDialog()
 		}
 	}
 
-	((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_H264))->SetCheck(accountSettings.videoH264);
-	((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_H263))->SetCheck(accountSettings.videoH263);
-	((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_VP8))->SetCheck(accountSettings.videoVP8);
-	((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_VP9))->SetCheck(accountSettings.videoVP9);
-	if (!accountSettings.videoBitrate) {
-		if (is_pjsua_running()) {
-			const pj_str_t codec_id = { "H264", 4 };
+	((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_H264))->SetCheck(accountSettings.videoH264);
+	((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_H263))->SetCheck(accountSettings.videoH263);
+	((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_VP8))->SetCheck(accountSettings.videoVP8);
+	((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_VP9))->SetCheck(accountSettings.videoVP9);
+	if (!accountSettings.videoBitrate)
+	{
+		if (is_pjsua_running())
+		{
+			const pj_str_t codec_id = {"H264", 4};
 			pjmedia_vid_codec_param param;
 			pjsua_vid_codec_get_param(&codec_id, &param);
 			accountSettings.videoBitrate = param.enc_fmt.det.vid.max_bps / 1000;
@@ -248,7 +321,7 @@ BOOL SettingsDlg::OnInitDialog()
 	GetDlgItem(IDC_SETTINGS_VIDEO_BITRATE)->SetWindowText(str);
 #endif
 
-	((CButton*)GetDlgItem(IDC_SETTINGS_RPORT))->SetCheck(accountSettings.rport);
+	((CButton *)GetDlgItem(IDC_SETTINGS_RPORT))->SetCheck(accountSettings.rport);
 	str.Format(_T("%d"), accountSettings.sourcePort);
 	GetDlgItem(IDC_SETTINGS_SOURCE_PORT)->SetWindowText(str);
 	str.Format(_T("%d"), accountSettings.rtpPortMin);
@@ -257,19 +330,19 @@ BOOL SettingsDlg::OnInitDialog()
 	GetDlgItem(IDC_SETTINGS_RTP_PORT_MAX)->SetWindowText(str);
 
 	GetDlgItem(IDC_SETTINGS_DNS_SRV_NS)->SetWindowText(accountSettings.dnsSrvNs);
-	((CButton*)GetDlgItem(IDC_SETTINGS_DNS_SRV_CHECKBOX))->SetCheck(accountSettings.dnsSrv);
+	((CButton *)GetDlgItem(IDC_SETTINGS_DNS_SRV_CHECKBOX))->SetCheck(accountSettings.dnsSrv);
 
 	GetDlgItem(IDC_SETTINGS_STUN)->SetWindowText(accountSettings.stun);
-	((CButton*)GetDlgItem(IDC_SETTINGS_STUN_CHECKBOX))->SetCheck(accountSettings.enableSTUN);
+	((CButton *)GetDlgItem(IDC_SETTINGS_STUN_CHECKBOX))->SetCheck(accountSettings.enableSTUN);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_DTMF_METHOD);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_DTMF_METHOD);
 	combobox->AddString(Translate(_T("Auto")));
 	combobox->AddString(Translate(_T("In-band")));
 	combobox->AddString(Translate(_T("RFC2833")));
 	combobox->AddString(Translate(_T("SIP-INFO")));
 	combobox->SetCurSel(accountSettings.DTMFMethod);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_AUTO_ANSWER);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_AUTO_ANSWER);
 	combobox->AddString(Translate(_T("No")));
 	autoAnswerValues.Add(_T(""));
 	combobox->AddString(Translate(_T("Control Button")));
@@ -279,14 +352,16 @@ BOOL SettingsDlg::OnInitDialog()
 	combobox->AddString(Translate(_T("All Calls")));
 	autoAnswerValues.Add(_T("all"));
 	combobox->SetCurSel(0);
-	for (i = 0; i < autoAnswerValues.GetCount(); i++) {
-		if (accountSettings.autoAnswer == autoAnswerValues.GetAt(i)) {
+	for (i = 0; i < autoAnswerValues.GetCount(); i++)
+	{
+		if (accountSettings.autoAnswer == autoAnswerValues.GetAt(i))
+		{
 			combobox->SetCurSel(i);
 			break;
 		}
 	}
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_FWD);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_FWD);
 	combobox->AddString(Translate(_T("No")));
 	forwardingValues.Add(_T(""));
 	combobox->SetCurSel(0);
@@ -294,8 +369,10 @@ BOOL SettingsDlg::OnInitDialog()
 	forwardingValues.Add(_T("button"));
 	combobox->AddString(Translate(_T("All Calls")));
 	forwardingValues.Add(_T("all"));
-	for (i = 0; i < forwardingValues.GetCount(); i++) {
-		if (accountSettings.forwarding == forwardingValues.GetAt(i)) {
+	for (i = 0; i < forwardingValues.GetCount(); i++)
+	{
+		if (accountSettings.forwarding == forwardingValues.GetAt(i))
+		{
 			combobox->SetCurSel(i);
 			break;
 		}
@@ -304,7 +381,7 @@ BOOL SettingsDlg::OnInitDialog()
 	str.Format(_T("%d"), accountSettings.forwardingDelay);
 	GetDlgItem(IDC_SETTINGS_FWD_DELAY)->SetWindowText(str);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_DENY_INCOMING);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_DENY_INCOMING);
 	combobox->AddString(Translate(_T("No")));
 	denyIncomingValues.Add(_T(""));
 	combobox->AddString(Translate(_T("Control Button")));
@@ -320,8 +397,10 @@ BOOL SettingsDlg::OnInitDialog()
 	combobox->AddString(Translate(_T("All Calls")));
 	denyIncomingValues.Add(_T("all"));
 	combobox->SetCurSel(0);
-	for (i = 0; i < denyIncomingValues.GetCount(); i++) {
-		if (accountSettings.denyIncoming == denyIncomingValues.GetAt(i)) {
+	for (i = 0; i < denyIncomingValues.GetCount(); i++)
+	{
+		if (accountSettings.denyIncoming == denyIncomingValues.GetAt(i))
+		{
 			combobox->SetCurSel(i);
 			break;
 		}
@@ -329,35 +408,38 @@ BOOL SettingsDlg::OnInitDialog()
 
 	GetDlgItem(IDC_SETTINGS_DIRECTORY)->SetWindowText(accountSettings.usersDirectory);
 
-	combobox= (CComboBox*)GetDlgItem(IDC_SETTINGS_DEFAULT_ACTION);
-	n = sizeof(defaultActionItems)/sizeof(defaultActionItems[0]);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_DEFAULT_ACTION);
+	n = sizeof(defaultActionItems) / sizeof(defaultActionItems[0]);
 	found = false;
-	for (int i=0;i<n;i++) {
+	for (int i = 0; i < n; i++)
+	{
 		combobox->AddString(Translate(defaultActionValues[i].GetBuffer()));
-		if (accountSettings.defaultAction==defaultActionItems[i]) {
+		if (accountSettings.defaultAction == defaultActionItems[i])
+		{
 			combobox->SetCurSel(i);
 			found = true;
 		}
 	}
-	if (!found)  {
+	if (!found)
+	{
 		combobox->SetCurSel(0);
 	}
 
-	((CButton*)GetDlgItem(IDC_SETTINGS_MEDIA_BUTTONS))->SetCheck(accountSettings.enableMediaButtons);
-	((CButton*)GetDlgItem(IDC_SETTINGS_HID))->SetCheck(accountSettings.headsetSupport);
-	((CButton*)GetDlgItem(IDC_SETTINGS_LOCAL_DTMF))->SetCheck(accountSettings.localDTMF);
-	((CButton*)GetDlgItem(IDC_SETTINGS_SINGLE_MODE))->SetCheck(accountSettings.singleMode);
-	((CButton*)GetDlgItem(IDC_SETTINGS_ENABLE_LOG))->SetCheck(accountSettings.enableLog);
-	((CButton*)GetDlgItem(IDC_SETTINGS_BRING_TO_FRONT))->SetCheck(accountSettings.bringToFrontOnIncoming);
-	((CButton*)GetDlgItem(IDC_SETTINGS_ANSWER_BOX_RANDOM))->SetCheck(accountSettings.randomAnswerBox);
-	((CButton*)GetDlgItem(IDC_SETTINGS_CALL_WAITING))->SetCheck(accountSettings.callWaiting);
-	((CButton*)GetDlgItem(IDC_SETTINGS_MULTI_MONITOR))->SetCheck(accountSettings.multiMonitor);
-	((CButton*)GetDlgItem(IDC_SETTINGS_NETWORK_CHANGES))->SetCheck(accountSettings.networkChanges);
-	((CButton*)GetDlgItem(IDC_SETTINGS_DISMESS))->SetCheck(accountSettings.disableMessaging);
-	((CButton*)GetDlgItem(IDC_SETTINGS_DISABLE_NAME_LOOKUP))->SetCheck(accountSettings.disableNameLookup);
-	((CButton*)GetDlgItem(IDC_SETTINGS_ENABLE_LOCAL))->SetCheck(accountSettings.enableLocalAccount);
+	((CButton *)GetDlgItem(IDC_SETTINGS_MEDIA_BUTTONS))->SetCheck(accountSettings.enableMediaButtons);
+	((CButton *)GetDlgItem(IDC_SETTINGS_HID))->SetCheck(accountSettings.headsetSupport);
+	((CButton *)GetDlgItem(IDC_SETTINGS_LOCAL_DTMF))->SetCheck(accountSettings.localDTMF);
+	((CButton *)GetDlgItem(IDC_SETTINGS_SINGLE_MODE))->SetCheck(accountSettings.singleMode);
+	((CButton *)GetDlgItem(IDC_SETTINGS_ENABLE_LOG))->SetCheck(accountSettings.enableLog);
+	((CButton *)GetDlgItem(IDC_SETTINGS_BRING_TO_FRONT))->SetCheck(accountSettings.bringToFrontOnIncoming);
+	((CButton *)GetDlgItem(IDC_SETTINGS_ANSWER_BOX_RANDOM))->SetCheck(accountSettings.randomAnswerBox);
+	((CButton *)GetDlgItem(IDC_SETTINGS_CALL_WAITING))->SetCheck(accountSettings.callWaiting);
+	((CButton *)GetDlgItem(IDC_SETTINGS_MULTI_MONITOR))->SetCheck(accountSettings.multiMonitor);
+	((CButton *)GetDlgItem(IDC_SETTINGS_NETWORK_CHANGES))->SetCheck(accountSettings.networkChanges);
+	((CButton *)GetDlgItem(IDC_SETTINGS_DISMESS))->SetCheck(accountSettings.disableMessaging);
+	((CButton *)GetDlgItem(IDC_SETTINGS_DISABLE_NAME_LOOKUP))->SetCheck(accountSettings.disableNameLookup);
+	((CButton *)GetDlgItem(IDC_SETTINGS_ENABLE_LOCAL))->SetCheck(accountSettings.enableLocalAccount);
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_UPDATES_INTERVAL);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_UPDATES_INTERVAL);
 	combobox->AddString(Translate(_T("Daily")));
 	combobox->AddString(Translate(_T("Weekly")));
 	combobox->AddString(Translate(_T("Monthly")));
@@ -388,8 +470,9 @@ BOOL SettingsDlg::OnInitDialog()
 	CString rab;
 	LPTSTR ptr;
 	ULONG pnChars;
-	rab=_T("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
-	if (regKey.Open(HKEY_CURRENT_USER, rab, KEY_READ) == ERROR_SUCCESS) {
+	rab = _T("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+	if (regKey.Open(HKEY_CURRENT_USER, rab, KEY_READ) == ERROR_SUCCESS)
+	{
 		ptr = str.GetBuffer(255);
 		pnChars = 256;
 		regKey.QueryStringValue(_T(_GLOBAL_NAME_NICE), ptr, &pnChars);
@@ -398,10 +481,96 @@ BOOL SettingsDlg::OnInitDialog()
 		str.MakeLower();
 		CString tmp = accountSettings.exeFile;
 		tmp.MakeLower();
-		if (str.Find(tmp) != -1) {
-			((CButton*)GetDlgItem(IDC_SETTINGS_STARTUP))->SetCheck(1);
+		if (str.Find(tmp) != -1)
+		{
+			((CButton *)GetDlgItem(IDC_SETTINGS_STARTUP))->SetCheck(1);
 		}
 	}
+
+	// ── FASE 14 REVISADO: Dark Mode ──────────────────────────────────────────
+
+	// Barra de título escura
+	BOOL darkTitle = TRUE;
+	DwmSetWindowAttribute(GetSafeHwnd(), 20, &darkTitle, sizeof(darkTitle));
+
+	// Fundo da janela
+	SetClassLongPtr(m_hWnd, GCLP_HBRBACKGROUND,
+					(LONG_PTR)::CreateSolidBrush(RGB(28, 28, 28)));
+
+	// Iterar todos os controles filhos e aplicar dark por tipo
+	{
+		UINT_PTR uSubId = 300;
+		CWnd *pChild = GetWindow(GW_CHILD);
+		while (pChild)
+		{
+			TCHAR szClass[64] = {0};
+			::GetClassName(pChild->GetSafeHwnd(), szClass, 63);
+
+			if (_tcsicmp(szClass, _T("ComboBox")) == 0)
+			{
+				LONG lStyle = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+				lStyle &= ~(CBS_OWNERDRAWVARIABLE);
+				lStyle |= CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
+				::SetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE, lStyle);
+				SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+			}
+			else if (_tcsicmp(szClass, _T("Edit")) == 0)
+			{
+				SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+			}
+			else if (_tcsicmp(szClass, _T("ListBox")) == 0)
+			{
+				SetWindowTheme(pChild->GetSafeHwnd(), L"DarkMode_Explorer", NULL);
+			}
+			else if (_tcsicmp(szClass, _T("Button")) == 0)
+			{
+				LONG style = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+				LONG tipo = style & BS_TYPEMASK;
+
+				if (tipo == BS_PUSHBUTTON || tipo == BS_DEFPUSHBUTTON)
+				{
+					LONG lStyle = ::GetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE);
+					lStyle &= ~(BS_PUSHBUTTON | BS_DEFPUSHBUTTON);
+					lStyle |= BS_OWNERDRAW;
+					::SetWindowLong(pChild->GetSafeHwnd(), GWL_STYLE, lStyle);
+					SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+				}
+				else
+				{
+					SetWindowTheme(pChild->GetSafeHwnd(), L"", L"");
+				}
+			}
+
+			pChild = pChild->GetNextWindow();
+		}
+	}
+
+	// Slider de volume de toque
+	CWnd *pSlider = GetDlgItem(IDC_SETTINGS_VOLUME_RING);
+	if (pSlider)
+	{
+		SetWindowTheme(pSlider->GetSafeHwnd(), L"", L"");
+	}
+
+	// Força repintura de todos os botões owner-draw
+	CWnd *pWnd = GetWindow(GW_CHILD);
+	while (pWnd)
+	{
+		TCHAR szClass[64] = {0};
+		::GetClassName(pWnd->GetSafeHwnd(), szClass, 63);
+		if (_tcsicmp(szClass, _T("Button")) == 0)
+		{
+			LONG style = ::GetWindowLong(pWnd->GetSafeHwnd(), GWL_STYLE);
+			if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
+			{
+				::InvalidateRect(pWnd->GetSafeHwnd(), NULL, TRUE);
+				::UpdateWindow(pWnd->GetSafeHwnd());
+			}
+		}
+		pWnd = pWnd->GetNextWindow();
+	}
+
+	RedrawWindow(NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 
 	return TRUE;
 }
@@ -419,56 +588,61 @@ void SettingsDlg::PostNcDestroy()
 }
 
 BEGIN_MESSAGE_MAP(SettingsDlg, CDialog)
-	ON_WM_CREATE()
-	ON_WM_CLOSE()
-	ON_WM_DESTROY()
-	ON_BN_CLICKED(IDCANCEL, &SettingsDlg::OnBnClickedCancel)
-	ON_BN_CLICKED(IDOK, &SettingsDlg::OnBnClickedOk)
-	ON_MESSAGE(UM_UPDATE_SETTINGS, &SettingsDlg::OnUpdateSettings)
-	ON_WM_VKEYTOITEM()
-	ON_NOTIFY(UDN_DELTAPOS, IDC_SETTINGS_SPIN_MODIFY, &SettingsDlg::OnDeltaposSpinModify)
-	ON_NOTIFY(UDN_DELTAPOS, IDC_SETTINGS_SPIN_ORDER, &SettingsDlg::OnDeltaposSpinOrder)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_FEATURE_CODES, &SettingsDlg::OnNMClickSyslinkFeatureCodes)
-	ON_NOTIFY(NM_RETURN, IDC_SETTINGS_FEATURE_CODES, &SettingsDlg::OnNMClickSyslinkFeatureCodes)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_RINGTONE, &SettingsDlg::OnNMClickSyslinkRingtone)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_MIC_AMPLIF, &SettingsDlg::OnNMClickSyslinkMicAmplif)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_SW_ADJUST, &SettingsDlg::OnNMClickSyslinkSwAdjust)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DTMF_METHOD, &SettingsDlg::OnNMClickSyslinkDTMFMethod)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_AUTO_ANSWER, &SettingsDlg::OnNMClickSyslinkAutoAnswer)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_FORWARDING, &SettingsDlg::OnNMClickSyslinkForwarding)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_FEATURE_CODES, &SettingsDlg::OnNMClickSyslinkHelpFeatureCodes)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DENY_INCOMING, &SettingsDlg::OnNMClickSyslinkDenyIncoming)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DIRECTORY, &SettingsDlg::OnNMClickSyslinkDirectory)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DNS_SRV, &SettingsDlg::OnNMClickSyslinkDnsSrv)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_STUN_SERVER, &SettingsDlg::OnNMClickSyslinkStunServer)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_MEDIA_BUTTONS, &SettingsDlg::OnNMClickSyslinkMediaButtons)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_MEDIA_BUTTONS, &SettingsDlg::OnNMClickSyslinkHeadsetSupport)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_LOCAL_DTMF, &SettingsDlg::OnNMClickSyslinkLocalDTMF)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_SINGLE_MODE, &SettingsDlg::OnNMClickSyslinkSingleMode)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_VAD, &SettingsDlg::OnNMClickSyslinkVAD)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_EC, &SettingsDlg::OnNMClickSyslinkEC)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_FORCE_CODEC, &SettingsDlg::OnNMClickSyslinkForceCodec)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_VIDEO, &SettingsDlg::OnNMClickSyslinkVideo)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_PORTS, &SettingsDlg::OnNMClickSyslinkPorts)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_AUDIO_CODECS, &SettingsDlg::OnNMClickSyslinkAudioCodecs)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_ENABLE_LOG, &SettingsDlg::OnNMClickSyslinkEnableLog)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_BRING_TO_FRONT, &SettingsDlg::OnNMClickSyslinkBringToFrontOnIncoming)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_ANSWER_BOX_RANDOM, &SettingsDlg::OnNMClickSyslinkRandomAnswerBox)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DISABLE_LOCAL, &SettingsDlg::OnNMClickSyslinkEnableLocal)
-	ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_CRASH_REPORT, &SettingsDlg::OnNMClickSyslinkCrashReport)
+ON_WM_CREATE()
+ON_WM_CLOSE()
+ON_WM_DESTROY()
+ON_BN_CLICKED(IDCANCEL, &SettingsDlg::OnBnClickedCancel)
+ON_BN_CLICKED(IDOK, &SettingsDlg::OnBnClickedOk)
+ON_MESSAGE(UM_UPDATE_SETTINGS, &SettingsDlg::OnUpdateSettings)
+ON_WM_VKEYTOITEM()
+ON_NOTIFY(UDN_DELTAPOS, IDC_SETTINGS_SPIN_MODIFY, &SettingsDlg::OnDeltaposSpinModify)
+ON_NOTIFY(UDN_DELTAPOS, IDC_SETTINGS_SPIN_ORDER, &SettingsDlg::OnDeltaposSpinOrder)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_FEATURE_CODES, &SettingsDlg::OnNMClickSyslinkFeatureCodes)
+ON_NOTIFY(NM_RETURN, IDC_SETTINGS_FEATURE_CODES, &SettingsDlg::OnNMClickSyslinkFeatureCodes)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_RINGTONE, &SettingsDlg::OnNMClickSyslinkRingtone)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_MIC_AMPLIF, &SettingsDlg::OnNMClickSyslinkMicAmplif)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_SW_ADJUST, &SettingsDlg::OnNMClickSyslinkSwAdjust)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DTMF_METHOD, &SettingsDlg::OnNMClickSyslinkDTMFMethod)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_AUTO_ANSWER, &SettingsDlg::OnNMClickSyslinkAutoAnswer)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_FORWARDING, &SettingsDlg::OnNMClickSyslinkForwarding)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_FEATURE_CODES, &SettingsDlg::OnNMClickSyslinkHelpFeatureCodes)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DENY_INCOMING, &SettingsDlg::OnNMClickSyslinkDenyIncoming)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DIRECTORY, &SettingsDlg::OnNMClickSyslinkDirectory)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DNS_SRV, &SettingsDlg::OnNMClickSyslinkDnsSrv)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_STUN_SERVER, &SettingsDlg::OnNMClickSyslinkStunServer)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_MEDIA_BUTTONS, &SettingsDlg::OnNMClickSyslinkMediaButtons)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_MEDIA_BUTTONS, &SettingsDlg::OnNMClickSyslinkHeadsetSupport)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_LOCAL_DTMF, &SettingsDlg::OnNMClickSyslinkLocalDTMF)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_SINGLE_MODE, &SettingsDlg::OnNMClickSyslinkSingleMode)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_VAD, &SettingsDlg::OnNMClickSyslinkVAD)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_EC, &SettingsDlg::OnNMClickSyslinkEC)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_FORCE_CODEC, &SettingsDlg::OnNMClickSyslinkForceCodec)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_VIDEO, &SettingsDlg::OnNMClickSyslinkVideo)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_PORTS, &SettingsDlg::OnNMClickSyslinkPorts)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_AUDIO_CODECS, &SettingsDlg::OnNMClickSyslinkAudioCodecs)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_ENABLE_LOG, &SettingsDlg::OnNMClickSyslinkEnableLog)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_BRING_TO_FRONT, &SettingsDlg::OnNMClickSyslinkBringToFrontOnIncoming)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_ANSWER_BOX_RANDOM, &SettingsDlg::OnNMClickSyslinkRandomAnswerBox)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_DISABLE_LOCAL, &SettingsDlg::OnNMClickSyslinkEnableLocal)
+ON_NOTIFY(NM_CLICK, IDC_SETTINGS_HELP_CRASH_REPORT, &SettingsDlg::OnNMClickSyslinkCrashReport)
 #ifdef _GLOBAL_VIDEO
-	ON_BN_CLICKED(IDC_SETTINGS_PREVIEW, &SettingsDlg::OnBnClickedPreview)
+ON_BN_CLICKED(IDC_SETTINGS_PREVIEW, &SettingsDlg::OnBnClickedPreview)
 #endif
-	ON_BN_CLICKED(IDC_SETTINGS_BROWSE, &SettingsDlg::OnBnClickedBrowse)
-	ON_EN_CHANGE(IDC_SETTINGS_RINGTONE, &SettingsDlg::OnChangeRingtone)
-	ON_BN_CLICKED(IDC_SETTINGS_DEFAULT, &SettingsDlg::OnBnClickedDefault)
-	ON_WM_HSCROLL()
-	ON_BN_CLICKED(IDC_SETTINGS_RECORDING_BROWSE, &SettingsDlg::OnBnClickedRecordingBrowse)
-	ON_EN_CHANGE(IDC_SETTINGS_RECORDING, &SettingsDlg::OnEnChangeRecording)
-	ON_BN_CLICKED(IDC_SETTINGS_RECORDING_DEFAULT, &SettingsDlg::OnBnClickedRecordingDefault)
-	ON_BN_CLICKED(IDC_SETTINGS_AA_OPTIONS, &SettingsDlg::OnBnClickedAAOptions)
-	ON_BN_CLICKED(IDC_SETTINGS_DNS_SRV_CHECKBOX, &SettingsDlg::OnBnClickedDnsSrv)
-	ON_BN_CLICKED(IDC_SETTINGS_STUN_CHECKBOX, &SettingsDlg::OnBnClickedStun)
+ON_BN_CLICKED(IDC_SETTINGS_BROWSE, &SettingsDlg::OnBnClickedBrowse)
+ON_EN_CHANGE(IDC_SETTINGS_RINGTONE, &SettingsDlg::OnChangeRingtone)
+ON_BN_CLICKED(IDC_SETTINGS_DEFAULT, &SettingsDlg::OnBnClickedDefault)
+ON_WM_HSCROLL()
+ON_BN_CLICKED(IDC_SETTINGS_RECORDING_BROWSE, &SettingsDlg::OnBnClickedRecordingBrowse)
+ON_EN_CHANGE(IDC_SETTINGS_RECORDING, &SettingsDlg::OnEnChangeRecording)
+ON_BN_CLICKED(IDC_SETTINGS_RECORDING_DEFAULT, &SettingsDlg::OnBnClickedRecordingDefault)
+ON_BN_CLICKED(IDC_SETTINGS_AA_OPTIONS, &SettingsDlg::OnBnClickedAAOptions)
+ON_BN_CLICKED(IDC_SETTINGS_DNS_SRV_CHECKBOX, &SettingsDlg::OnBnClickedDnsSrv)
+ON_BN_CLICKED(IDC_SETTINGS_STUN_CHECKBOX, &SettingsDlg::OnBnClickedStun)
+// ── FASE 14: Dark Mode ───────────────────────────
+ON_WM_CTLCOLOR()
+ON_WM_ERASEBKGND()
+ON_WM_DRAWITEM()
+// ─────────────────────────────────────────────────
 END_MESSAGE_MAP()
 
 void SettingsDlg::OnClose()
@@ -491,7 +665,7 @@ void SettingsDlg::OnBnClickedOk()
 
 LRESULT SettingsDlg::OnUpdateSettings(WPARAM wParam, LPARAM lParam)
 {
-	CString str; 
+	CString str;
 
 	CComboBox *combobox;
 	int i;
@@ -511,40 +685,42 @@ LRESULT SettingsDlg::OnUpdateSettings(WPARAM wParam, LPARAM lParam)
 	{
 		accountSettings.audioRingDevice = _T("");
 	}
-	accountSettings.micAmplification = ((CButton*)GetDlgItem(IDC_SETTINGS_MIC_AMPLIF))->GetCheck();
-	accountSettings.swLevelAdjustment = ((CButton*)GetDlgItem(IDC_SETTINGS_SW_ADJUST))->GetCheck();
+	accountSettings.micAmplification = ((CButton *)GetDlgItem(IDC_SETTINGS_MIC_AMPLIF))->GetCheck();
+	accountSettings.swLevelAdjustment = ((CButton *)GetDlgItem(IDC_SETTINGS_SW_ADJUST))->GetCheck();
 
-	accountSettings.vad = ((CButton*)GetDlgItem(IDC_SETTINGS_VAD))->GetCheck();
-	accountSettings.ec = ((CButton*)GetDlgItem(IDC_SETTINGS_EC))->GetCheck();
-	accountSettings.opusStereo = ((CButton*)GetDlgItem(IDC_SETTINGS_OPUS_STEREO))->GetCheck();
-	accountSettings.forceCodec = ((CButton*)GetDlgItem(IDC_SETTINGS_FORCE_CODEC))->GetCheck();
-
+	accountSettings.vad = ((CButton *)GetDlgItem(IDC_SETTINGS_VAD))->GetCheck();
+	accountSettings.ec = ((CButton *)GetDlgItem(IDC_SETTINGS_EC))->GetCheck();
+	accountSettings.opusStereo = ((CButton *)GetDlgItem(IDC_SETTINGS_OPUS_STEREO))->GetCheck();
+	accountSettings.forceCodec = ((CButton *)GetDlgItem(IDC_SETTINGS_FORCE_CODEC))->GetCheck();
 
 	bool hasStereo = false;
 	accountSettings.audioCodecs = _T("");
 	CListBox *listbox2;
-	listbox2 = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
+	listbox2 = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
 	for (unsigned i = 0; i < listbox2->GetCount(); i++)
 	{
 		CString value;
 		listbox2->GetText(i, value);
 		POSITION pos = mainDlg->audioCodecList.Find(value);
-		if (pos) {
+		if (pos)
+		{
 			mainDlg->audioCodecList.GetPrev(pos);
 			CString key = mainDlg->audioCodecList.GetPrev(pos);
 			accountSettings.audioCodecs += key + _T(" ");
-			if (!hasStereo && key.Right(2) == _T("/2") && key.Left(4) != _T("opus")) {
+			if (!hasStereo && key.Right(2) == _T("/2") && key.Left(4) != _T("opus"))
+			{
 				hasStereo = true;
 			}
 		}
 	}
 	accountSettings.audioCodecs.Trim();
-	if (hasStereo && accountSettings.ec) {
+	if (hasStereo && accountSettings.ec)
+	{
 		AfxMessageBox(_T("Echo Canceler enabled. Stereo will be converted to Mono."));
 	}
 
 #ifdef _GLOBAL_VIDEO
-	accountSettings.disableVideo = ((CButton*)GetDlgItem(IDC_SETTINGS_DISABLE_VIDEO))->GetCheck();
+	accountSettings.disableVideo = ((CButton *)GetDlgItem(IDC_SETTINGS_DISABLE_VIDEO))->GetCheck();
 	GetDlgItem(IDC_SETTINGS_VID_CAP_DEV)->GetWindowText(accountSettings.videoCaptureDevice);
 	if (accountSettings.videoCaptureDevice == Translate(_T("Default")))
 	{
@@ -555,15 +731,15 @@ LRESULT SettingsDlg::OnUpdateSettings(WPARAM wParam, LPARAM lParam)
 	{
 		accountSettings.videoCodec = _T("");
 	}
-	accountSettings.videoH264 = ((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_H264))->GetCheck();
-	accountSettings.videoH263 = ((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_H263))->GetCheck();
-	accountSettings.videoVP8 = ((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_VP8))->GetCheck();
-	accountSettings.videoVP9 = ((CButton*)GetDlgItem(IDC_SETTINGS_VIDEO_VP9))->GetCheck();
+	accountSettings.videoH264 = ((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_H264))->GetCheck();
+	accountSettings.videoH263 = ((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_H263))->GetCheck();
+	accountSettings.videoVP8 = ((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_VP8))->GetCheck();
+	accountSettings.videoVP9 = ((CButton *)GetDlgItem(IDC_SETTINGS_VIDEO_VP9))->GetCheck();
 	GetDlgItem(IDC_SETTINGS_VIDEO_BITRATE)->GetWindowText(str);
 	accountSettings.videoBitrate = _wtoi(str);
 #endif
 
-	accountSettings.rport = ((CButton*)GetDlgItem(IDC_SETTINGS_RPORT))->GetCheck();
+	accountSettings.rport = ((CButton *)GetDlgItem(IDC_SETTINGS_RPORT))->GetCheck();
 	GetDlgItem(IDC_SETTINGS_SOURCE_PORT)->GetWindowText(str);
 	accountSettings.sourcePort = _wtoi(str);
 	GetDlgItem(IDC_SETTINGS_RTP_PORT_MIN)->GetWindowText(str);
@@ -573,65 +749,70 @@ LRESULT SettingsDlg::OnUpdateSettings(WPARAM wParam, LPARAM lParam)
 
 	GetDlgItem(IDC_SETTINGS_DNS_SRV_NS)->GetWindowText(accountSettings.dnsSrvNs);
 	accountSettings.dnsSrvNs.Trim();
-	if (!accountSettings.dnsSrvNs.IsEmpty()) {
-		accountSettings.dnsSrv = ((CButton*)GetDlgItem(IDC_SETTINGS_DNS_SRV_CHECKBOX))->GetCheck();
+	if (!accountSettings.dnsSrvNs.IsEmpty())
+	{
+		accountSettings.dnsSrv = ((CButton *)GetDlgItem(IDC_SETTINGS_DNS_SRV_CHECKBOX))->GetCheck();
 	}
-	else {
+	else
+	{
 		accountSettings.dnsSrv = false;
 	}
 
 	GetDlgItem(IDC_SETTINGS_STUN)->GetWindowText(accountSettings.stun);
 	accountSettings.stun.Trim();
-	if (!accountSettings.stun.IsEmpty()) {
-		accountSettings.enableSTUN = ((CButton*)GetDlgItem(IDC_SETTINGS_STUN_CHECKBOX))->GetCheck();
+	if (!accountSettings.stun.IsEmpty())
+	{
+		accountSettings.enableSTUN = ((CButton *)GetDlgItem(IDC_SETTINGS_STUN_CHECKBOX))->GetCheck();
 	}
-	else {
+	else
+	{
 		accountSettings.enableSTUN = false;
 	}
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_DTMF_METHOD);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_DTMF_METHOD);
 	accountSettings.DTMFMethod = combobox->GetCurSel();
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_AUTO_ANSWER);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_AUTO_ANSWER);
 	accountSettings.autoAnswer = autoAnswerValues.GetAt(combobox->GetCurSel());
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_FWD);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_FWD);
 	accountSettings.forwarding = forwardingValues.GetAt(combobox->GetCurSel());
 	GetDlgItem(IDC_SETTINGS_FWD_NUMBER)->GetWindowText(accountSettings.forwardingNumber);
 	GetDlgItem(IDC_SETTINGS_FWD_DELAY)->GetWindowText(str);
 	accountSettings.forwardingDelay = _wtoi(str);
-	
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_DENY_INCOMING);
+
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_DENY_INCOMING);
 	accountSettings.denyIncoming = denyIncomingValues.GetAt(combobox->GetCurSel());
 
 	GetDlgItem(IDC_SETTINGS_DIRECTORY)->GetWindowText(accountSettings.usersDirectory);
 	accountSettings.usersDirectory.Trim();
-	combobox= (CComboBox*)GetDlgItem(IDC_SETTINGS_DEFAULT_ACTION);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_DEFAULT_ACTION);
 	accountSettings.defaultAction = defaultActionItems[combobox->GetCurSel()];
-	accountSettings.enableMediaButtons = ((CButton*)GetDlgItem(IDC_SETTINGS_MEDIA_BUTTONS))->GetCheck();
-	accountSettings.headsetSupport = ((CButton*)GetDlgItem(IDC_SETTINGS_HID))->GetCheck();
-	accountSettings.localDTMF = ((CButton*)GetDlgItem(IDC_SETTINGS_LOCAL_DTMF))->GetCheck();
-	accountSettings.singleMode = ((CButton*)GetDlgItem(IDC_SETTINGS_SINGLE_MODE))->GetCheck();
-	accountSettings.enableLog = ((CButton*)GetDlgItem(IDC_SETTINGS_ENABLE_LOG))->GetCheck();
-	accountSettings.bringToFrontOnIncoming = ((CButton*)GetDlgItem(IDC_SETTINGS_BRING_TO_FRONT))->GetCheck();
-	accountSettings.randomAnswerBox = ((CButton*)GetDlgItem(IDC_SETTINGS_ANSWER_BOX_RANDOM))->GetCheck();
-	accountSettings.callWaiting = ((CButton*)GetDlgItem(IDC_SETTINGS_CALL_WAITING))->GetCheck();
-	accountSettings.multiMonitor = ((CButton*)GetDlgItem(IDC_SETTINGS_MULTI_MONITOR))->GetCheck();
-	accountSettings.networkChanges = ((CButton*)GetDlgItem(IDC_SETTINGS_NETWORK_CHANGES))->GetCheck();
-	accountSettings.disableMessaging = ((CButton*)GetDlgItem(IDC_SETTINGS_DISMESS))->GetCheck();
-	accountSettings.disableNameLookup = ((CButton*)GetDlgItem(IDC_SETTINGS_DISABLE_NAME_LOOKUP))->GetCheck();
+	accountSettings.enableMediaButtons = ((CButton *)GetDlgItem(IDC_SETTINGS_MEDIA_BUTTONS))->GetCheck();
+	accountSettings.headsetSupport = ((CButton *)GetDlgItem(IDC_SETTINGS_HID))->GetCheck();
+	accountSettings.localDTMF = ((CButton *)GetDlgItem(IDC_SETTINGS_LOCAL_DTMF))->GetCheck();
+	accountSettings.singleMode = ((CButton *)GetDlgItem(IDC_SETTINGS_SINGLE_MODE))->GetCheck();
+	accountSettings.enableLog = ((CButton *)GetDlgItem(IDC_SETTINGS_ENABLE_LOG))->GetCheck();
+	accountSettings.bringToFrontOnIncoming = ((CButton *)GetDlgItem(IDC_SETTINGS_BRING_TO_FRONT))->GetCheck();
+	accountSettings.randomAnswerBox = ((CButton *)GetDlgItem(IDC_SETTINGS_ANSWER_BOX_RANDOM))->GetCheck();
+	accountSettings.callWaiting = ((CButton *)GetDlgItem(IDC_SETTINGS_CALL_WAITING))->GetCheck();
+	accountSettings.multiMonitor = ((CButton *)GetDlgItem(IDC_SETTINGS_MULTI_MONITOR))->GetCheck();
+	accountSettings.networkChanges = ((CButton *)GetDlgItem(IDC_SETTINGS_NETWORK_CHANGES))->GetCheck();
+	accountSettings.disableMessaging = ((CButton *)GetDlgItem(IDC_SETTINGS_DISMESS))->GetCheck();
+	accountSettings.disableNameLookup = ((CButton *)GetDlgItem(IDC_SETTINGS_DISABLE_NAME_LOOKUP))->GetCheck();
 	GetDlgItem(IDC_SETTINGS_RINGTONE)->GetWindowText(accountSettings.ringtone);
-	accountSettings.volumeRing = ((CSliderCtrl*)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->GetPos();
+	accountSettings.volumeRing = ((CSliderCtrl *)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->GetPos();
 	GetDlgItem(IDC_SETTINGS_RECORDING)->GetWindowText(accountSettings.recordingPath);
 	accountSettings.recordingPath.Trim();
 	accountSettings.recordingFormat = IsDlgButtonChecked(IDC_SETTINGS_RECORDING_MP3) ? _T("mp3") : _T("wav");
-	accountSettings.autoRecording = ((CButton*)GetDlgItem(IDC_SETTINGS_RECORDING_CHECKBOX))->GetCheck();
-	accountSettings.recordingButton = ((CButton*)GetDlgItem(IDC_SETTINGS_RECORDING_BUTTON))->GetCheck();
-	accountSettings.enableLocalAccount = ((CButton*)GetDlgItem(IDC_SETTINGS_ENABLE_LOCAL))->GetCheck();
+	accountSettings.autoRecording = ((CButton *)GetDlgItem(IDC_SETTINGS_RECORDING_CHECKBOX))->GetCheck();
+	accountSettings.recordingButton = ((CButton *)GetDlgItem(IDC_SETTINGS_RECORDING_BUTTON))->GetCheck();
+	accountSettings.enableLocalAccount = ((CButton *)GetDlgItem(IDC_SETTINGS_ENABLE_LOCAL))->GetCheck();
 
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_UPDATES_INTERVAL);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_UPDATES_INTERVAL);
 	i = combobox->GetCurSel();
-	switch (i) {
+	switch (i)
+	{
 	case 0:
 		accountSettings.updatesInterval = _T("daily");
 		break;
@@ -648,11 +829,12 @@ LRESULT SettingsDlg::OnUpdateSettings(WPARAM wParam, LPARAM lParam)
 		accountSettings.updatesInterval = _T("");
 	}
 
-	msip_startup_set(((CButton*)GetDlgItem(IDC_SETTINGS_STARTUP))->GetCheck());
+	msip_startup_set(((CButton *)GetDlgItem(IDC_SETTINGS_STARTUP))->GetCheck());
 
 	accountSettings.SettingsSave();
 
-	if (accountSettings.singleMode) {
+	if (accountSettings.singleMode)
+	{
 		mainDlg->messagesDlg->OnClose();
 	}
 #ifdef _GLOBAL_VIDEO
@@ -672,15 +854,18 @@ LRESULT SettingsDlg::OnUpdateSettings(WPARAM wParam, LPARAM lParam)
 void SettingsDlg::OnBnClickedBrowse()
 {
 	CFileDialog dlgFile(TRUE, _T("wav"), 0, OFN_NOCHANGEDIR | OFN_HIDEREADONLY, _T("WAV Files (*.wav)|*.wav|"));
-	if (dlgFile.DoModal() == IDOK) {
+	if (dlgFile.DoModal() == IDOK)
+	{
 		CString cwd;
 		LPTSTR ptr = cwd.GetBuffer(MAX_PATH);
 		::GetCurrentDirectory(MAX_PATH, ptr);
 		cwd.ReleaseBuffer();
-		if (cwd.MakeLower() + _T("\\") + dlgFile.GetFileName().MakeLower() == dlgFile.GetPathName().MakeLower()) {
+		if (cwd.MakeLower() + _T("\\") + dlgFile.GetFileName().MakeLower() == dlgFile.GetPathName().MakeLower())
+		{
 			GetDlgItem(IDC_SETTINGS_RINGTONE)->SetWindowText(dlgFile.GetFileName());
 		}
-		else {
+		else
+		{
 			GetDlgItem(IDC_SETTINGS_RINGTONE)->SetWindowText(dlgFile.GetPathName());
 		}
 	}
@@ -691,7 +876,6 @@ void SettingsDlg::OnChangeRingtone()
 	CString str;
 	GetDlgItem(IDC_SETTINGS_RINGTONE)->GetWindowText(str);
 	GetDlgItem(IDC_SETTINGS_DEFAULT)->EnableWindow(str.GetLength() > 0);
-
 }
 
 void SettingsDlg::OnBnClickedDefault()
@@ -699,15 +883,18 @@ void SettingsDlg::OnBnClickedDefault()
 	GetDlgItem(IDC_SETTINGS_RINGTONE)->SetWindowText(_T(""));
 }
 
-void SettingsDlg::OnHScroll(UINT nSBCode, UINT, CScrollBar* sender)
+void SettingsDlg::OnHScroll(UINT nSBCode, UINT, CScrollBar *sender)
 {
-	if (sender == GetDlgItem(IDC_SETTINGS_VOLUME_RING)) {
-		if (nSBCode == SB_ENDSCROLL) {
+	if (sender == GetDlgItem(IDC_SETTINGS_VOLUME_RING))
+	{
+		if (nSBCode == SB_ENDSCROLL)
+		{
 			int volumeRingOld = accountSettings.volumeRing;
-			accountSettings.volumeRing = ((CSliderCtrl*)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->GetPos();
+			accountSettings.volumeRing = ((CSliderCtrl *)GetDlgItem(IDC_SETTINGS_VOLUME_RING))->GetPos();
 			CString ringtone;
 			GetDlgItem(IDC_SETTINGS_RINGTONE)->GetWindowText(ringtone);
-			if (ringtone.IsEmpty()) {
+			if (ringtone.IsEmpty())
+			{
 				ringtone = _T("ringtone.wav");
 			}
 			mainDlg->onPlayerPlay(MSIP_SOUND_CUSTOM_NOLOOP, (LPARAM)&ringtone);
@@ -720,20 +907,23 @@ void SettingsDlg::OnBnClickedRecordingBrowse()
 {
 	CString strOutFolder;
 	CString str;
-	CShellManager* pShellManager = ((CWinAppEx*)AfxGetApp())->GetShellManager();
+	CShellManager *pShellManager = ((CWinAppEx *)AfxGetApp())->GetShellManager();
 	GetDlgItem(IDC_SETTINGS_RECORDING)->GetWindowText(str);
-	if (str.IsEmpty() || PathIsRelative(str)) {
+	if (str.IsEmpty() || PathIsRelative(str))
+	{
 		TCHAR currentDir[MAX_PATH];
 		GetCurrentDirectory(MAX_PATH, currentDir);
 		strOutFolder = currentDir;
-		if (!str.IsEmpty()) {
+		if (!str.IsEmpty())
+		{
 			strOutFolder.AppendFormat(_T("\\%s"), str);
 		}
 	}
-	else {
+	else
+	{
 		strOutFolder = str;
 	}
-	if (pShellManager->BrowseForFolder(strOutFolder,this, strOutFolder))
+	if (pShellManager->BrowseForFolder(strOutFolder, this, strOutFolder))
 	{
 		GetDlgItem(IDC_SETTINGS_RECORDING)->SetWindowText(strOutFolder);
 	}
@@ -753,36 +943,41 @@ void SettingsDlg::OnBnClickedRecordingDefault()
 
 void SettingsDlg::OnBnClickedAAOptions()
 {
-	if (!aaOptionsDlg) {
+	if (!aaOptionsDlg)
+	{
 		aaOptionsDlg = new AAOptionsDlg(this);
 	}
-	else {
+	else
+	{
 		aaOptionsDlg->SetForegroundWindow();
 	}
 }
 
-
-int SettingsDlg::OnVKeyToItem(UINT nKey, CListBox* pListBox, UINT nIndex)
+int SettingsDlg::OnVKeyToItem(UINT nKey, CListBox *pListBox, UINT nIndex)
 {
-	CListBox *listbox = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS_ALL);
-	CListBox *listbox2 = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
-	if (pListBox == listbox && listbox->GetCurSel()!=-1) {
-		if (nKey == 32) {
-			//add
+	CListBox *listbox = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS_ALL);
+	CListBox *listbox2 = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
+	if (pListBox == listbox && listbox->GetCurSel() != -1)
+	{
+		if (nKey == 32)
+		{
+			// add
 			NMUPDOWN NMUpDown;
 			NMUpDown.iDelta = -1;
 			LRESULT lResult;
-			OnDeltaposSpinModify((NMHDR*)&NMUpDown, &lResult);
+			OnDeltaposSpinModify((NMHDR *)&NMUpDown, &lResult);
 			return -2;
 		}
 	}
-	if (pListBox == listbox2 && listbox2->GetCurSel() != -1) {
-		if (nKey == 46) {
-			//remove
+	if (pListBox == listbox2 && listbox2->GetCurSel() != -1)
+	{
+		if (nKey == 46)
+		{
+			// remove
 			NMUPDOWN NMUpDown;
 			NMUpDown.iDelta = 1;
 			LRESULT lResult;
-			OnDeltaposSpinModify((NMHDR*)&NMUpDown, &lResult);
+			OnDeltaposSpinModify((NMHDR *)&NMUpDown, &lResult);
 			return -2;
 		}
 	}
@@ -793,11 +988,12 @@ void SettingsDlg::OnDeltaposSpinModify(NMHDR *pNMHDR, LRESULT *pResult)
 {
 	LPNMUPDOWN pNMUpDown = reinterpret_cast<LPNMUPDOWN>(pNMHDR);
 	CListBox *listbox;
-	listbox = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS_ALL);
+	listbox = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS_ALL);
 	CListBox *listbox2;
-	listbox2 = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
-	if (pNMUpDown->iDelta == -1) {
-		//add
+	listbox2 = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
+	if (pNMUpDown->iDelta == -1)
+	{
+		// add
 		int selected = listbox->GetCurSel();
 		if (selected != LB_ERR)
 		{
@@ -808,8 +1004,9 @@ void SettingsDlg::OnDeltaposSpinModify(NMHDR *pNMHDR, LRESULT *pResult)
 			listbox->SetCurSel(selected < listbox->GetCount() ? selected : selected - 1);
 		}
 	}
-	else {
-		//remove
+	else
+	{
+		// remove
 		int selected = listbox2->GetCurSel();
 		if (selected != LB_ERR)
 		{
@@ -826,14 +1023,15 @@ void SettingsDlg::OnDeltaposSpinOrder(NMHDR *pNMHDR, LRESULT *pResult)
 {
 	LPNMUPDOWN pNMUpDown = reinterpret_cast<LPNMUPDOWN>(pNMHDR);
 	CListBox *listbox2;
-	listbox2 = (CListBox*)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
+	listbox2 = (CListBox *)GetDlgItem(IDC_SETTINGS_AUDIO_CODECS);
 	int selected = listbox2->GetCurSel();
 	if (selected != LB_ERR)
 	{
 		CString str;
 		listbox2->GetText(selected, str);
-		if (pNMUpDown->iDelta == -1) {
-			//up
+		if (pNMUpDown->iDelta == -1)
+		{
+			// up
 			if (selected > 0)
 			{
 				listbox2->DeleteString(selected);
@@ -841,8 +1039,9 @@ void SettingsDlg::OnDeltaposSpinOrder(NMHDR *pNMHDR, LRESULT *pResult)
 				listbox2->SetCurSel(selected - 1);
 			}
 		}
-		else {
-			//down
+		else
+		{
+			// down
 			if (selected < listbox2->GetCount() - 1)
 			{
 				listbox2->DeleteString(selected);
@@ -854,12 +1053,14 @@ void SettingsDlg::OnDeltaposSpinOrder(NMHDR *pNMHDR, LRESULT *pResult)
 	*pResult = 0;
 }
 
-void SettingsDlg::OnNMClickSyslinkFeatureCodes(NMHDR* pNMHDR, LRESULT* pResult)
+void SettingsDlg::OnNMClickSyslinkFeatureCodes(NMHDR *pNMHDR, LRESULT *pResult)
 {
-	if (!featureCodesDlg) {
+	if (!featureCodesDlg)
+	{
 		featureCodesDlg = new FeatureCodesDlg(this);
 	}
-	else {
+	else
+	{
 		featureCodesDlg->SetForegroundWindow();
 	}
 }
@@ -900,7 +1101,7 @@ void SettingsDlg::OnNMClickSyslinkForwarding(NMHDR *pNMHDR, LRESULT *pResult)
 	*pResult = 0;
 }
 
-void SettingsDlg::OnNMClickSyslinkHelpFeatureCodes(NMHDR* pNMHDR, LRESULT* pResult)
+void SettingsDlg::OnNMClickSyslinkHelpFeatureCodes(NMHDR *pNMHDR, LRESULT *pResult)
 {
 	OpenHelp(_T("featureCodes"));
 	*pResult = 0;
@@ -1024,10 +1225,11 @@ void SettingsDlg::OnNMClickSyslinkCrashReport(NMHDR *pNMHDR, LRESULT *pResult)
 void SettingsDlg::OnBnClickedPreview()
 {
 	CComboBox *combobox;
-	combobox = (CComboBox*)GetDlgItem(IDC_SETTINGS_VID_CAP_DEV);
+	combobox = (CComboBox *)GetDlgItem(IDC_SETTINGS_VID_CAP_DEV);
 	CString name;
 	combobox->GetWindowText(name);
-	if (!mainDlg->previewWin) {
+	if (!mainDlg->previewWin)
+	{
 		mainDlg->previewWin = new Preview(mainDlg);
 	}
 	mainDlg->previewWin->Start(mainDlg->VideoCaptureDeviceId(name));
@@ -1036,10 +1238,12 @@ void SettingsDlg::OnBnClickedPreview()
 
 void SettingsDlg::OnBnClickedDnsSrv()
 {
-	if (((CButton*)GetDlgItem(IDC_SETTINGS_DNS_SRV_CHECKBOX))->GetCheck()) {
+	if (((CButton *)GetDlgItem(IDC_SETTINGS_DNS_SRV_CHECKBOX))->GetCheck())
+	{
 		CString str;
 		GetDlgItem(IDC_SETTINGS_DNS_SRV_NS)->GetWindowText(str);
-		if (str.IsEmpty()) {
+		if (str.IsEmpty())
+		{
 			GetDlgItem(IDC_SETTINGS_DNS_SRV_NS)->SetWindowText(_T("8.8.8.8; 8.8.4.4"));
 		}
 	}
@@ -1047,12 +1251,150 @@ void SettingsDlg::OnBnClickedDnsSrv()
 
 void SettingsDlg::OnBnClickedStun()
 {
-	if (((CButton*)GetDlgItem(IDC_SETTINGS_STUN_CHECKBOX))->GetCheck()) {
+	if (((CButton *)GetDlgItem(IDC_SETTINGS_STUN_CHECKBOX))->GetCheck())
+	{
 		CString str;
 		GetDlgItem(IDC_SETTINGS_STUN)->GetWindowText(str);
-		if (str.IsEmpty()) {
+		if (str.IsEmpty())
+		{
 			GetDlgItem(IDC_SETTINGS_STUN)->SetWindowText(_T("stun.l.google.com:19302"));
 		}
 	}
 }
 
+// ── FASE 14: Dark Mode ───────────────────────────────────────────────────────
+
+HBRUSH SettingsDlg::OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor)
+{
+	// Brush base — não usar o retorno do CDialog (branco)
+	static HBRUSH hBrushDark = ::CreateSolidBrush(RGB(28, 28, 28));
+
+	switch (nCtlColor)
+	{
+	case CTLCOLOR_STATIC:
+		// Labels, grupos e texto de checkbox/radio — branco
+		pDC->SetBkMode(TRANSPARENT);
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushDark;
+
+	case CTLCOLOR_BTN:
+		// Checkbox e radio button — branco
+		pDC->SetBkMode(TRANSPARENT);
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushDark;
+
+	case CTLCOLOR_EDIT:
+		// CEdit, campos de texto
+		pDC->SetBkColor(RGB(36, 36, 36));
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return (HBRUSH)::CreateSolidBrush(RGB(36, 36, 36));
+
+	case CTLCOLOR_LISTBOX:
+		// Drop-down aberto do ComboBox e CListBox
+		pDC->SetBkColor(RGB(36, 36, 36));
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return (HBRUSH)::CreateSolidBrush(RGB(36, 36, 36));
+
+	default:
+		pDC->SetBkColor(RGB(28, 28, 28));
+		pDC->SetTextColor(RGB(210, 210, 210));
+		return hBrushDark;
+	}
+}
+
+BOOL SettingsDlg::OnEraseBkgnd(CDC *pDC)
+{
+	CRect rect;
+	GetClientRect(&rect);
+	pDC->FillSolidRect(&rect, RGB(28, 28, 28));
+	return TRUE;
+}
+void SettingsDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
+{
+	HDC hdc = lpDIS->hDC;
+	RECT rc = lpDIS->rcItem;
+	UINT state = lpDIS->itemState;
+
+	// ── Botão owner-draw ─────────────────────────────────────────────────────
+	if (lpDIS->CtlType == ODT_BUTTON)
+	{
+		bool pressed = (state & ODS_SELECTED) != 0;
+		bool focused = (state & ODS_FOCUS) != 0;
+		bool disabled = (state & ODS_DISABLED) != 0;
+
+		COLORREF clrBg = pressed ? RGB(120, 0, 60) : disabled ? RGB(28, 28, 28)
+															  : RGB(36, 36, 36);
+		COLORREF clrBord = focused ? RGB(180, 20, 90) : pressed ? RGB(180, 20, 90)
+																: RGB(80, 80, 80);
+		COLORREF clrText = pressed ? RGB(255, 20, 147) : disabled ? RGB(80, 80, 80)
+																  : RGB(210, 210, 210);
+
+		// Fundo
+		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
+
+		// Borda
+		HPEN hPen = ::CreatePen(PS_SOLID, 1, clrBord);
+		HPEN hOldPen = (HPEN)::SelectObject(hdc, hPen);
+		::Rectangle(hdc, rc.left, rc.top, rc.right, rc.bottom);
+		::SelectObject(hdc, hOldPen);
+		::DeleteObject(hPen);
+
+		// Texto
+		TCHAR szText[128] = {0};
+		::GetWindowText(lpDIS->hwndItem, szText, 127);
+		::SetBkMode(hdc, TRANSPARENT);
+		::SetTextColor(hdc, clrText);
+		HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
+		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+		::DrawText(hdc, szText, -1, &rc,
+				   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		::SelectObject(hdc, hOldFont);
+
+		return;
+	}
+
+	// ── ComboBox owner-draw ──────────────────────────────────────────────────
+	if (lpDIS->CtlType == ODT_COMBOBOX)
+	{
+		COLORREF clrBg = (state & ODS_SELECTED) ? RGB(80, 0, 40) : RGB(36, 36, 36);
+		COLORREF clrText = (state & ODS_SELECTED) ? RGB(255, 180, 210) : RGB(210, 210, 210);
+
+		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
+
+		if (lpDIS->itemID != (UINT)-1)
+		{
+			TCHAR szText[256] = {0};
+			CComboBox *pCombo = (CComboBox *)GetDlgItem(nIDCtl);
+			if (pCombo)
+				pCombo->GetLBText(lpDIS->itemID, szText);
+
+			::SetBkMode(hdc, TRANSPARENT);
+			::SetTextColor(hdc, clrText);
+			RECT rcText = rc;
+			rcText.left += 4;
+			HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
+			HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
+			::DrawText(hdc, szText, -1, &rcText,
+					   DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+			::SelectObject(hdc, hOldFont);
+		}
+
+		if (state & ODS_FOCUS)
+		{
+			RECT rcFocus = rc;
+			::InflateRect(&rcFocus, -1, -1);
+			HPEN hPen = ::CreatePen(PS_SOLID, 1, RGB(180, 20, 90));
+			HPEN hOld = (HPEN)::SelectObject(hdc, hPen);
+			::SelectObject(hdc, ::GetStockObject(HOLLOW_BRUSH));
+			::Rectangle(hdc, rcFocus.left, rcFocus.top,
+						rcFocus.right, rcFocus.bottom);
+			::SelectObject(hdc, hOld);
+			::DeleteObject(hPen);
+		}
+		return;
+	}
+
+	CDialog::OnDrawItem(nIDCtl, lpDIS);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
