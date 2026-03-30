@@ -21,13 +21,15 @@
 #include "resource.h"
 #include "global.h"
 
-class ShortcutsDlg :
-	public CDialog
+class ShortcutsDlg : public CDialog
 {
 public:
-	ShortcutsDlg(CWnd* pParent = NULL);	// standard constructor
+	ShortcutsDlg(CWnd *pParent = NULL); // standard constructor
 	~ShortcutsDlg();
-	enum { IDD = IDD_SHORTCUTS };
+	enum
+	{
+		IDD = IDD_SHORTCUTS
+	};
 
 protected:
 	virtual BOOL OnInitDialog();
@@ -43,5 +45,9 @@ public:
 	afx_msg void OnNMClickSyslinkToggle(NMHDR *pNMHDR, LRESULT *pResult);
 	afx_msg void OnNMClickSyslinkBLF(NMHDR *pNMHDR, LRESULT *pResult);
 	void UpdateToggle(bool check, int i);
+	// ── FASE 16: Dark Mode ───────────────────────────
+	afx_msg HBRUSH OnCtlColor(CDC *pDC, CWnd *pWnd, UINT nCtlColor);
+	afx_msg BOOL OnEraseBkgnd(CDC *pDC);
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS);
+	// ─────────────────────────────────────────────────
 };
-
