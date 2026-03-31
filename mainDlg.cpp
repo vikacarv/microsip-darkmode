@@ -2688,6 +2688,7 @@ void CmainDlg::ShowTrayIcon()
 
 void CmainDlg::OnCreated()
 {
+
 	LRESULT pResult;
 	mainDlg->OnTcnSelchangeTab(NULL, &pResult);
 
@@ -3590,6 +3591,34 @@ void CmainDlg::PJCreate()
 	}
 }
 
+// ===== DARK MODE: extrai ringtone.wav padrão se não existir =====
+static void EnsureDefaultRingtone(const CString &pathExe)
+{
+	CString dest = pathExe + _T("\\.wav");
+	if (!::PathFileExists(dest))
+	{
+		HRSRC hRes = ::FindResource(NULL, MAKEINTRESOURCE(IDR_RINGTONE_WAV), _T("WAVE"));
+		if (hRes)
+		{
+			HGLOBAL hData = ::LoadResource(NULL, hRes);
+			DWORD dwSize = ::SizeofResource(NULL, hRes);
+			LPVOID pData = ::LockResource(hData);
+			if (pData && dwSize)
+			{
+				HANDLE hFile = ::CreateFile(dest, GENERIC_WRITE, 0, NULL,
+											CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+				if (hFile != INVALID_HANDLE_VALUE)
+				{
+					DWORD written = 0;
+					::WriteFile(hFile, pData, dwSize, &written, NULL);
+					::CloseHandle(hFile);
+				}
+			}
+		}
+	}
+}
+// ===== FIM DARK MODE =====
+
 void CmainDlg::PJCreateRaw()
 {
 	player_eof_data = NULL;
@@ -3598,6 +3627,57 @@ void CmainDlg::PJCreateRaw()
 	forwardingTimerCallId = PJSUA_INVALID_ID;
 
 	isSubscribed = false;
+
+	// ===== RINGTONE CUSTOMIZADO: extrai recurso para disco se não existir =====
+	{
+		CString ringtoneFile = accountSettings.pathExe + _T("\\ringtone.wav");
+		if (!::PathFileExists(ringtoneFile))
+		{
+			HRSRC hRes = ::FindResource(AfxGetInstanceHandle(),
+										MAKEINTRESOURCE(IDR_RINGTONE_WAV),
+										_T("WAVE"));
+			if (hRes)
+			{
+				HGLOBAL hData = ::LoadResource(AfxGetInstanceHandle(), hRes);
+				if (hData)
+				{
+					LPVOID pData = ::LockResource(hData);
+					DWORD dwSize = ::SizeofResource(AfxGetInstanceHandle(), hRes);
+					if (pData && dwSize)
+					{
+						CFile file;
+						if (file.Open(ringtoneFile,
+									  CFile::modeCreate | CFile::modeWrite))
+						{
+							file.Write(pData, dwSize);
+							file.Close();
+						}
+					}
+					::FreeResource(hData);
+				}
+			}
+		}
+	}
+	// ===== FIM RINGTONE CUSTOMIZADO =====
+
+	// ===== FALLBACK: copia ringtone da pasta res se recurso RC falhou =====
+	{
+		CString ringtoneFile = accountSettings.pathExe + _T("\\ringtone.wav");
+		if (!::PathFileExists(ringtoneFile))
+		{
+			CString srcFile = accountSettings.pathExe + _T("\\res\\ringtonecyberpunk.wav");
+			if (!::PathFileExists(srcFile))
+			{
+				// tenta um nível acima (estrutura de build do VS)
+				srcFile = accountSettings.pathExe + _T("\\..\\res\\ringtonecyberpunk.wav");
+			}
+			if (::PathFileExists(srcFile))
+			{
+				::CopyFile(srcFile, ringtoneFile, FALSE);
+			}
+		}
+	}
+	// ===== FIM FALLBACK =====
 	if (accountSettings.audioCodecs.IsEmpty())
 	{
 		accountSettings.audioCodecs = _T(_GLOBAL_CODECS_ENABLED);
@@ -4091,8 +4171,8 @@ void CmainDlg::PJVideoCodecs()
 void CmainDlg::UpdateSoundDevicesIds()
 {
 	msip_audio_input = -1;
-	msip_audio_output = -2;
-	msip_audio_ring = -2;
+	msip_audio_output = -1;
+	msip_audio_ring = -1;
 	CString audioOutputDevice = accountSettings.audioOutputDevice;
 	CString audioInputDevice = accountSettings.audioInputDevice;
 	unsigned count = PJMEDIA_AUD_MAX_DEVS;
@@ -4117,6 +4197,12 @@ void CmainDlg::UpdateSoundDevicesIds()
 			}
 		}
 	}
+	// ===== FIX: garantir fallback para dispositivo padrão =====
+	if (msip_audio_output < -1)
+		msip_audio_output = -1;
+	if (msip_audio_ring < -1)
+		msip_audio_ring = -1;
+	// ===== FIM FIX =====
 }
 
 void CmainDlg::PJDestroy(bool exit)
@@ -5520,6 +5606,10 @@ void CmainDlg::PlayerPlay(CString filename, bool noLoop, bool inCall, bool isAA)
 	bool stopCallback = false;
 	if (!filename.IsEmpty())
 	{
+		// ===== FIX: ativa dispositivo ANTES de criar o player =====
+		msip_set_sound_device(inCall ? msip_audio_output : msip_audio_ring, true);
+		// ===== FIM FIX =====
+
 		pj_str_t file = MSIP::StrToPjStr(filename);
 		pjsua_player_id player_id;
 		if (is_pjsua_running() && pjsua_player_create(&file, noLoop ? PJMEDIA_FILE_NO_LOOP : 0, &player_id) == PJ_SUCCESS)
@@ -5541,20 +5631,15 @@ void CmainDlg::PlayerPlay(CString filename, bool noLoop, bool inCall, bool isAA)
 						stopCallback = true;
 					}
 				}
-				if (
-					(!tone_gen && pjsua_conf_get_active_ports() <= 2) ||
-					(tone_gen && pjsua_conf_get_active_ports() <= 3))
-				{
-					msip_set_sound_device(inCall ? msip_audio_output : msip_audio_ring);
-				}
+				// ===== REMOVIDO o bloco if(active_ports) que bloqueava =====
 				pjsua_conf_port_id conf_port_id = pjsua_player_get_conf_port(player_id);
 				if (inCall)
 				{
-					pjsua_conf_adjust_rx_level(conf_port_id, 0.4);
+					pjsua_conf_adjust_rx_level(conf_port_id, 0.4f);
 				}
 				else
 				{
-					pjsua_conf_adjust_rx_level(conf_port_id, (float)accountSettings.volumeRing / 100);
+					pjsua_conf_adjust_rx_level(conf_port_id, (float)accountSettings.volumeRing / 100.0f);
 				}
 				pjsua_conf_connect(conf_port_id, 0);
 			}
@@ -5566,7 +5651,6 @@ void CmainDlg::PlayerPlay(CString filename, bool noLoop, bool inCall, bool isAA)
 		onPlayerStop(NULL, NULL);
 	}
 }
-
 void CmainDlg::PlayerStop()
 {
 	if (player_eof_data && player_eof_data->player_id != PJSUA_INVALID_ID)
