@@ -25,4 +25,4 @@ ipch/
 
 # Executable outputs (serão gerados via CI ou build manual)
 *.exe
-*.msi
+*.msi*.zip
