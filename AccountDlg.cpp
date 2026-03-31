@@ -242,16 +242,14 @@ BOOL AccountDlg::OnInitDialog()
 		pChild = pChild->GetNextWindow();
 	}
 
-	
-
 	// Força repintura de todos os controles após subclass instalada
 	RedrawWindow(NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
 
-// Força repintura de todos os controles após owner-draw instalado
-	CWnd* pWnd = GetWindow(GW_CHILD);
+	// Força repintura de todos os controles após owner-draw instalado
+	CWnd *pWnd = GetWindow(GW_CHILD);
 	while (pWnd)
 	{
-		TCHAR szClass[64] = { 0 };
+		TCHAR szClass[64] = {0};
 		::GetClassName(pWnd->GetSafeHwnd(), szClass, 63);
 		if (_tcsicmp(szClass, _T("Button")) == 0)
 		{
@@ -267,7 +265,8 @@ BOOL AccountDlg::OnInitDialog()
 
 	// ────────────────────────────────────────────────────────────────────────
 
-	return TRUE;}
+	return TRUE;
+}
 
 void AccountDlg::OnDestroy()
 {
@@ -914,11 +913,11 @@ void AccountDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 		bool disabled = (state & ODS_DISABLED) != 0;
 
 		COLORREF clrBg = pressed ? RGB(120, 0, 60) : disabled ? RGB(28, 28, 28)
-		: RGB(36, 36, 36);
+															  : RGB(36, 36, 36);
 		COLORREF clrBord = focused ? RGB(180, 20, 90) : pressed ? RGB(180, 20, 90)
 																: RGB(80, 80, 80);
 		COLORREF clrText = pressed ? RGB(255, 20, 147) : disabled ? RGB(80, 80, 80)
-		: RGB(210, 210, 210);
+																  : RGB(210, 210, 210);
 
 		// Fundo
 		::FillRect(hdc, &rc, ::CreateSolidBrush(clrBg));
@@ -938,7 +937,7 @@ void AccountDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 		HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
 		HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
 		::DrawText(hdc, szText, -1, &rc,
-		DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+				   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 		::SelectObject(hdc, hOldFont);
 
 		return;
@@ -966,7 +965,7 @@ void AccountDlg::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 			HFONT hFont = (HFONT)::SendMessage(lpDIS->hwndItem, WM_GETFONT, 0, 0);
 			HFONT hOldFont = (HFONT)::SelectObject(hdc, hFont);
 			::DrawText(hdc, szText, -1, &rcText,
-			DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
+					   DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
 			::SelectObject(hdc, hOldFont);
 		}
 

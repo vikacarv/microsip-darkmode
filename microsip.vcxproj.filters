@@ -159,6 +159,9 @@
     <ClCompile Include="ButtonSafe.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DarkTabCtrl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AccountDlg.h">
@@ -317,6 +320,9 @@
     <ClInclude Include="ButtonSafe.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="DarkTabCtrl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\active.ico">
@@ -388,6 +394,9 @@
       <Filter>Resource Files</Filter>
     </None>
     <None Include="res\menu.rc2">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="res\ringtonecyberpunk.wav">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

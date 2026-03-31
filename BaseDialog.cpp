@@ -281,9 +281,9 @@ HBRUSH CBaseDialog::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
         nCtlColor == CTLCOLOR_EDIT ||
         nCtlColor == CTLCOLOR_LISTBOX)
     {
-        pDC->SetBkColor(RGB(28, 28, 28));
-        pDC->SetTextColor(RGB(220, 220, 220));
-        return (HBRUSH)::CreateSolidBrush(RGB(28, 28, 28));
+        pDC->SetBkColor(RGB(36, 36, 36));
+		pDC->SetTextColor(RGB(220, 220, 220));
+		return (HBRUSH)::CreateSolidBrush(RGB(36, 36, 36));
     }
     return hbr;
 }

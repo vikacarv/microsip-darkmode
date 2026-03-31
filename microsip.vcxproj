@@ -245,6 +245,7 @@
     <ClCompile Include="CListCtrl_SortItemsEx.cpp" />
     <ClCompile Include="ClosableTabCtrl.cpp" />
     <ClCompile Include="Contacts.cpp" />
+    <ClCompile Include="DarkTabCtrl.cpp" />
     <ClCompile Include="Dialer.cpp" />
     <ClCompile Include="FeatureCodesDlg.cpp" />
     <ClCompile Include="global.cpp" />
@@ -299,6 +300,7 @@
     <ClInclude Include="ClosableTabCtrl.h" />
     <ClInclude Include="const.h" />
     <ClInclude Include="Contacts.h" />
+    <ClInclude Include="DarkTabCtrl.h" />
     <ClInclude Include="define.h" />
     <ClInclude Include="Dialer.h" />
     <ClInclude Include="FeatureCodesDlg.h" />
@@ -358,6 +360,11 @@
     <Image Include="res\ringing.ico" />
     <Image Include="res\toolbar1.bmp" />
     <Image Include="res\unknown.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\ringtonecyberpunk.wav">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <None Include="res\dialog.rc2" />
