@@ -8,7 +8,7 @@ Esta é uma versão de testes. Podem existir bugs. Use com cautela em ambiente d
 
 ## Screenshots
 
-![MicroSIP Dark Mode](assets/screen_microsip.png)
+![MicroSIP Dark Mode](/dist/assets/screen_microsip.png)
 
 ## Funcionalidades do Dark Mode
 
