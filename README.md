@@ -27,8 +27,8 @@ Esta é uma versão de testes. Podem existir bugs. Use com cautela em ambiente d
 
 ## Instalação
 
-1. Baixe `MicroSIP.exe` em [Releases](https://github.com/vikacarv/microsip-darkmode/releases)
-2. Execute o arquivo — não requer instalação
+1. Baixe o .zip em [Releases](https://github.com/vikacarv/microsip-darkmode/releases)
+2. Extraia o arquivo zipado, e execute o arquivo — não requer instalação
 3. Configure sua conta SIP normalmente
 
 ## ⚠️ Segurança do Windows (SmartScreen)
