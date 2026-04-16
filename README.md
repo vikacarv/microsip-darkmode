@@ -31,6 +31,15 @@ Esta é uma versão de testes. Podem existir bugs. Use com cautela em ambiente d
 2. Execute o arquivo — não requer instalação
 3. Configure sua conta SIP normalmente
 
+## ⚠️ Segurança do Windows (SmartScreen)
+
+Ao executar o aplicativo, o Windows pode exibir o aviso "Windows protegeu seu computador".
+Isso ocorre porque o executável não possui assinatura digital reconhecida.
+
+Para continuar:
+1. Clique em **Mais informações**
+2. Clique em **Executar assim mesmo**
+
 ## Baseado em
 
 [MicroSIP](https://www.microsip.org/) 3.22.3 — softphone SIP open source
